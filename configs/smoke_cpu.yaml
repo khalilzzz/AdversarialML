@@ -1,0 +1,22 @@
+# Local CPU smoke test: exercises the whole pipeline in minutes. NOT a reproduction of any paper
+# number -- every value below that differs from base.yaml is a compute concession, and runs produced
+# with this config are marked as such in their result JSON.
+name: smoke_cpu
+cases: 1
+case_ids: [0]
+victim_runs: 1
+net: ResNet18
+width: 16
+restarts: 1
+attack_steps: 5
+poison_batch_size: 64
+epochs: 1
+pretrain_epochs: 1
+lr_milestones: [1]
+budget: 0.01
+eps: 16.0
+workers: 0
+save_poisons: packed
+# Train on 6% of CIFAR-10 so a CPU pass takes seconds. `data_ablation` is the paper's own Table 7
+# knob (appendix F.5), reused here purely as a compute concession.
+data_ablation: 0.06

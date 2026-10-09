@@ -1,0 +1,8 @@
+# Fig. 4a and Table 6: feature-space outlier filtering. Appendix F.2 uses a 4% budget with eps=16,
+# averaged over 6 randomly seeded poisoning runs. Paper: at 10% filtering the detector removes 248
+# poisons and 252 clean images, against 200/300 for random guessing.
+name: filtering
+budget: 0.04
+eps: 16.0
+cases: 6
+victim_runs: 1

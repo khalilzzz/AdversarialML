@@ -1,0 +1,4 @@
+# Table 8: squared Euclidean gradient distance instead of cosine similarity, i.e. optimizing eq. 2
+# directly. Paper: 61.25 (+-9.75). Section 3.3's Remark predicts cosine wins at this width.
+name: table8_euclidean
+objective: euclidean

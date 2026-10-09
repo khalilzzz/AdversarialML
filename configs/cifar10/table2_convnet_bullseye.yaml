@@ -1,0 +1,5 @@
+# Table 2, ConvNet, Bullseye. Paper: 78.75 (+-7.66).
+name: table2_convnet_bullseye
+net: ConvNet
+eps: 32.0
+recipe: bullseye

@@ -1,0 +1,5 @@
+# Table 2, ResNet-18 column, "Proposed": gradient matching, eps=16, budget 1%. Paper: 90.00 (+-3.87).
+name: table2_resnet18_gm
+net: ResNet18
+eps: 16.0
+recipe: gradient-matching

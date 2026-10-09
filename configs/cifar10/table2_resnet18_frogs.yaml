@@ -1,0 +1,7 @@
+# Table 2, ResNet-18, Poison Frogs feature-collision objective. Paper: 1.25 (+-1.19).
+# Section 5.1: feature collision objectives "are only successful in the shallower network in the
+# from-scratch setting".
+name: table2_resnet18_frogs
+net: ResNet18
+eps: 16.0
+recipe: poison-frogs

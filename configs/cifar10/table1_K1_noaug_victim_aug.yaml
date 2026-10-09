@@ -1,0 +1,5 @@
+# Table 1 row 2: no diff. augmentation while brewing, but the victim augments. Paper: 32.50 (+-12.27).
+name: table1_K1_noaug_victim_aug
+ensemble: 1
+differentiable_augment: false
+victim_augment: true

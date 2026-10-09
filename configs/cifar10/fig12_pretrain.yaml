@@ -1,0 +1,6 @@
+# Fig. 12 right template: poison success against the number of epochs the surrogate was pretrained
+# for. Sweep `pretrain_epochs` over 0, 5, 10, 20, 30, 35, 40 at eps=16 and eps=8. Paper: for eps=16
+# even 20 epochs of pretraining suffice; for eps=8 performance keeps increasing with pretraining.
+name: fig12_pretrain
+pretrain_epochs: 20
+eps: 16.0

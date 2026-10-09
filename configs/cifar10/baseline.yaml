@@ -1,0 +1,3 @@
+# Paper baseline row of Table 8 / Table 1 last row: ResNet-18, 1% budget, eps=16, diff. data
+# augmentation, R=8, M=250, K=1, victim augments. Paper: 91.25% (+-6.14), val acc 92.20%.
+name: cifar10_baseline

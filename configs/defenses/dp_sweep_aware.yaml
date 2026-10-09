@@ -1,0 +1,8 @@
+# Fig. 4b dashed/solid comparison: the attacker knows the noise level and applies the same clipping
+# and freshly drawn noise to the poison gradient every time B is evaluated (appendix F.3).
+name: dp_sweep_aware
+budget: 0.01
+eps: 16.0
+dp_clip: 1.0
+dp_noise: 0.001
+attacker_aware_dp: true

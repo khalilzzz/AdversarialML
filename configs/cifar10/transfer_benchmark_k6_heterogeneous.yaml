@@ -1,0 +1,10 @@
+# Table 3 last row: "an ensemble of K = 6, consisting of 2 ResNet-18, 2 MobileNet-V2 and 2 VGG11
+# models, then the same poisoned dataset can compromise all models and generalize across
+# architectures". Paper: 49 / 38 / 35, average 40.67 -- the VGG11 column is what the ensemble fixes.
+name: transfer_benchmark_k6_heterogeneous
+eps: 8.0
+budget: 0.01
+ensemble: 6
+ensemble_nets: [ResNet18, ResNet18, MobileNetV2, MobileNetV2, VGG11, VGG11]
+net: ResNet18
+victim_net: VGG11

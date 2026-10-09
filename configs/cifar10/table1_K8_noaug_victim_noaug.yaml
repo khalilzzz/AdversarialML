@@ -1,0 +1,6 @@
+# Table 1 row 3: an 8-model ensemble instead of augmentation, victim does not augment.
+# Paper: 78.75 (+-11.77).
+name: table1_K8_noaug_victim_noaug
+ensemble: 8
+differentiable_augment: false
+victim_augment: false

@@ -1,0 +1,7 @@
+# Table 1 row 4: one model with diff. data augmentation, victim augments. Paper: 91.25 (+-6.14).
+# The caption's point: "Differentiable data augmentation is able to replace a large 8-model
+# ensemble, without increasing computational effort."
+name: table1_K1_diffaug_victim_aug
+ensemble: 1
+differentiable_augment: true
+victim_augment: true

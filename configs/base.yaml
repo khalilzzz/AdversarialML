@@ -1,0 +1,51 @@
+# Paper defaults. Every value here is the one the paper states; see docs/DESIGN_DECISIONS.md for
+# the per-field source, including the handful of fields the paper leaves open.
+name: base
+dataset: CIFAR10
+data_path: data/raw
+
+# Threat model (paper section 3.1)
+budget: 0.01
+eps: 16.0
+targets: 1
+
+# Evaluation protocol (section 5, appendix B)
+cases: 10
+victim_runs: 8
+
+# Brewing (section 5: tau = 0.1, R = 8, M = 250 for all experiments)
+recipe: gradient-matching
+objective: cosine
+cosine_mode: global
+target_criterion: cross-entropy
+tau: 0.1
+restarts: 8
+attack_steps: 250
+attack_optimizer: signAdam
+attack_scheduling: true
+init: randn
+poison_batch_size: 512
+poison_shuffle: false
+differentiable_augment: true
+ensemble: 1
+
+# Model
+net: ResNet18
+width: 64
+
+# Victim / surrogate training (appendix B.2)
+epochs: 40
+batch_size: 128
+momentum: 0.9
+weight_decay: 0.0005
+nesterov: true
+lr_milestones: [14, 24, 35]
+lr_gamma: 0.1
+victim_augment: true
+
+# Runtime
+device: auto
+workers: 2
+results_dir: results
+poison_dir: poisons
+checkpoint_dir: checkpoints

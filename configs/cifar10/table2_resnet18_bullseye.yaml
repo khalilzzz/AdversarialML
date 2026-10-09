@@ -1,0 +1,5 @@
+# Table 2, ResNet-18, Bullseye objective inside the same brewing framework. Paper: 3.75 (+-3.56).
+name: table2_resnet18_bullseye
+net: ResNet18
+eps: 16.0
+recipe: bullseye

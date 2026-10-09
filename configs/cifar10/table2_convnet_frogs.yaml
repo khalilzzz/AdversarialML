@@ -1,0 +1,5 @@
+# Table 2, ConvNet, Poison Frogs. Paper: 52.50 (+-12.85).
+name: table2_convnet_frogs
+net: ConvNet
+eps: 32.0
+recipe: poison-frogs

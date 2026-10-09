@@ -1,0 +1,5 @@
+# Table 2, ConvNet column, eps=32 (the caption's value for this architecture). Paper: 86.25 (+-9.43).
+name: table2_convnet_gm
+net: ConvNet
+eps: 32.0
+recipe: gradient-matching

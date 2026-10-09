@@ -1,0 +1,7 @@
+# Fig. 12 left template: thin ResNet-18 variants, "the usual base width of 64 is replaced by the
+# width value shown on the x-axis". Sweep `width` over 4, 8, 16, 32, 48, 64, 96 and `objective` over
+# cosine / euclidean, plus the poison-frogs recipe. Paper finding: Euclidean dominates below width
+# 16, cosine above it.
+name: fig12_width
+width: 16
+objective: cosine

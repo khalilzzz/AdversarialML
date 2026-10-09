@@ -1,0 +1,3 @@
+# Table 8: Carlini-Wagner loss instead of cross-entropy for the target. Paper: 77.50 (+-9.32).
+name: table8_cw
+target_criterion: carlini-wagner

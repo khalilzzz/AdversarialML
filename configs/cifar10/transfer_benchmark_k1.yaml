@@ -1,0 +1,11 @@
+# Table 3 setting, K=1: the Schwarzschild et al. (2020) "Training From Scratch" benchmark uses a 1%
+# budget and eps=8, poisons brewed on a ResNet-18 and evaluated on ResNet-18 / MobileNet-V2 / VGG11.
+# Paper: 45 / 36 / 8, average 29.67. Set `victim_net` to pick the victim architecture.
+# NOTE: the benchmark's own 100 fixed scenarios live in its repository, not in this paper; see
+# docs/DEVIATIONS.md. This config reproduces the *setting* on the paper's 10 published cases.
+name: transfer_benchmark_k1
+eps: 8.0
+budget: 0.01
+ensemble: 1
+net: ResNet18
+victim_net: ResNet18

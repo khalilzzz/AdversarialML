@@ -1,0 +1,6 @@
+# Section 5.1 inset figure template: poison success and brewing time against restarts R and ensemble
+# size K, for a 1% budget and eps=16 on a ResNet-18. Sweep `restarts` over 1, 8 and `ensemble` over
+# 1, 2, 4, 8. Paper: ~0.90 at (R=1,K=1) rising to ~0.98-0.99 at K=4..8; restarts help independently.
+name: inset_RK_sweep
+restarts: 1
+ensemble: 1

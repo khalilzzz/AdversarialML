@@ -1,0 +1,14 @@
+# Fig. 13: direct transfer, 10 runs, 0.1% budget, eps=16. "the model was only trained on the
+# 'brewing' network, without knowledge of the victim". Set `net` (brewing) and `victim_net`
+# independently; the paper's grid is {ResNet18, MobileNetv2, ResNet34} x the same three.
+name: imagenet_fig13_transfer
+dataset: ImageNet
+data_path: data
+net: ResNet18
+victim_net: ResNet34
+pretrained: true
+budget: 0.001
+eps: 16.0
+victim_runs: 1
+ensemble: 1
+workers: 8

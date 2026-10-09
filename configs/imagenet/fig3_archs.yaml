@@ -1,0 +1,13 @@
+# Fig. 3 right bottom: VGG16, ResNet18, MobileNet-v2, ResNet34, ResNet50 at a 0.1% budget, eps=16.
+# Set `net` and `victim_net` to the same architecture (gray-box) per run.
+name: imagenet_fig3_archs
+dataset: ImageNet
+data_path: data
+net: ResNet34
+victim_net: ResNet34
+pretrained: true
+budget: 0.001
+eps: 16.0
+victim_runs: 1
+ensemble: 1
+workers: 8

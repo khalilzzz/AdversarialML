@@ -1,0 +1,19 @@
+# Table 7, appendix F.5: the victim trains on only part of the (clean + poisoned) data, modelling
+# the case where "the victim might only scrape 300" of 1000 poisoned images posted. 5 runs.
+# Paper: 60% success with 70% of the data removed, 100% with 50% removed.
+name: imagenet_table7_ablation
+dataset: ImageNet
+data_path: data
+net: ResNet18
+victim_net: ResNet18
+pretrained: true
+budget: 0.001
+eps: 16.0
+cases: 5
+victim_runs: 1
+data_ablation: 0.5
+workers: 8
+# Regime 1 ("victim ablation"): only the victim's training set is reduced, the brewing network is
+# trained on the full data. Set `ablate_surrogate: true` for regime 2 ("pretrained + victim
+# ablation"), where the brewing network is trained on a reduced set as well.
+ablate_surrogate: false

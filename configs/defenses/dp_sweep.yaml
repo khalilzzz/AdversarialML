@@ -1,0 +1,9 @@
+# Fig. 4b: differentially private SGD as a defense. Appendix F.3 keeps gradient clipping at 1 and
+# sweeps the noise; both act on the mini-batch level. Run with scripts/run_defense.py --dp, which
+# expands this into one run per noise level in {0, 1e-5, 1e-4, 1e-3, 1e-2}.
+# Paper finding: pushing poison success below 15% costs more than 20% validation accuracy.
+name: dp_sweep
+budget: 0.01
+eps: 16.0
+dp_clip: 1.0
+dp_noise: 0.001

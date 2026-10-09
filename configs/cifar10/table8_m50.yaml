@@ -1,0 +1,3 @@
+# Table 8: fewer optimization steps, M=50 instead of 250. Paper: 40.00 (+-10.87).
+name: table8_m50
+attack_steps: 50

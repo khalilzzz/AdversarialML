@@ -1,0 +1,7 @@
+# Table 1 row 1: no diff. data augmentation while brewing, victim does not augment either.
+# Paper: 100.00% (+-0.00). The easiest setting, and the one that shows augmentation is what makes
+# the problem hard, not the optimization.
+name: table1_K1_noaug_victim_noaug
+ensemble: 1
+differentiable_augment: false
+victim_augment: false

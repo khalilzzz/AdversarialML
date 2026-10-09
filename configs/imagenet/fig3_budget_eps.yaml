@@ -1,0 +1,18 @@
+# Fig. 3 right top: ImageNet ResNet-18 trained from scratch on poisoned data, for budgets 0.1%,
+# 0.05%, 0.01% at eps=16 and eps=8. Paper: even at 0.05% budget and eps=8 the attack succeeds ~80%
+# of the time. Brewing uses torchvision pretrained weights (appendix B.2); no ensembles are used on
+# ImageNet (section 3.4). Victim training from scratch needs multiple GPUs -- see docs/DEVIATIONS.md.
+name: imagenet_fig3_budget_eps
+dataset: ImageNet
+data_path: data
+net: ResNet18
+victim_net: ResNet18
+pretrained: true
+budget: 0.001
+eps: 8.0
+victim_runs: 1
+restarts: 8
+attack_steps: 250
+ensemble: 1
+batch_size: 128
+workers: 8
