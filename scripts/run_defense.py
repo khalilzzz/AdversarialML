@@ -24,7 +24,7 @@ import torch
 from _cli import announce, build_parser, config_from_args
 
 from witchesbrew.attacks.brew import Brewer
-from witchesbrew.data.augment import build_augmentation
+from witchesbrew.data.augment import augmentation_for
 from witchesbrew.data.datasets import build_datasets, num_classes
 from witchesbrew.data.setup import build_case
 from witchesbrew.defenses.dp import dp_sweep_configs
@@ -59,8 +59,8 @@ def run_filtering(args) -> None:
     cfg = config_from_args(args)
     announce(cfg)
     device = get_device(cfg.device)
-    trainset, validset = build_datasets(cfg.dataset, cfg.data_path)
-    augment = build_augmentation(cfg.dataset).to(device)
+    trainset, validset = build_datasets(cfg.dataset, cfg.data_path, cfg)
+    augment = augmentation_for(cfg).to(device)
 
     all_reports = []
     case_ids = cfg.case_ids if cfg.case_ids is not None else list(range(cfg.cases))

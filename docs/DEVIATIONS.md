@@ -39,10 +39,11 @@ Any run that used `--set` to shrink the protocol records those overrides in its 
 
 Fully tabulated in `DESIGN_DECISIONS.md`. The ones that could move a number:
 
-1. **Cosine reduction across layers.** Eq. 3 writes a single inner product over all of `theta`; the
-   reference code instead sums per-layer cosine similarities. Both are implemented
-   (`cosine_mode: global | per_layer`), with the literal reading of eq. 3 as the default. The two are
-   not numerically equivalent and may differ by a few points of poison success.
+1. **Carlini-Wagner target loss (Table 8 only).** `carlini_wagner` here is the usual margin,
+   `max_{j != y_adv} z_j - z_{y_adv}`. The reference code's default `cw_loss` takes the maximum over
+   *all* logits including `y_adv`, so its loss and its gradient vanish once the target is already
+   classified as `y_adv`; its own `cw_loss2` is the margin used here. Only the Table 8 CW row
+   (77.50%) is affected; cross-entropy is the default everywhere else.
 2. **Attack step-size schedule.** The paper says "decaying step size" without milestones; the ×0.1
    drops at `M/2.667`, `M/1.6`, `M/1.142` come from the reference code. Table 8 shows the method is
    sensitive to the step budget (`M=50` loses >50 points), so the schedule matters.

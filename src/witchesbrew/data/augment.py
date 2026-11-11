@@ -76,8 +76,30 @@ class RandomTransform(torch.nn.Module):
         return F.grid_sample(x, grid, mode=self.mode, align_corners=True)
 
 
-def build_augmentation(dataset: str) -> RandomTransform:
-    """Augmentation module with the paper's resolutions and crop padding (appendix B.2)."""
-    if dataset.upper() == "CIFAR10":
-        return RandomTransform(size=32, shift=4, flip=True)
-    return RandomTransform(size=224, shift=28, flip=True)
+def build_augmentation(
+    dataset: str,
+    size: int | None = None,
+    shift: int | None = None,
+    flip: bool = True,
+) -> RandomTransform:
+    """Augmentation module.
+
+    With no overrides this is the paper's recipe (appendix B.2): 32 px / +-4 on CIFAR-10, 224 / +-28
+    otherwise. A custom dataset passes its own `size`; `shift` defaults to `round(size/8)`, which
+    reproduces 4 at 32 and 28 at 224, so the translation budget scales with the resolution.
+    """
+    if size is None:
+        size = 32 if dataset.upper() == "CIFAR10" else 224
+    if shift is None:
+        shift = max(1, round(size / 8))
+    return RandomTransform(size=size, shift=shift, flip=flip)
+
+
+def augmentation_for(cfg) -> RandomTransform:
+    """Augmentation for a Config, honouring the custom-dataset resolution/shift fields."""
+    return build_augmentation(
+        cfg.dataset,
+        size=getattr(cfg, "image_size", None),
+        shift=getattr(cfg, "augment_shift", None),
+        flip=getattr(cfg, "augment_flip", True),
+    )

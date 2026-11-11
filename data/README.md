@@ -48,3 +48,18 @@ module, so it is identical for the attack and the victim.
 * `poisons/` — exported perturbations. Appendix D ships "only the subset of poisoned images and not
   the full dataset"; `scripts/brew_case.py` does the same, in `packed`, `png` or `imagefolder` form.
 * `results/<experiment>/caseNN.json` — one file per case, which is what makes long sweeps resumable.
+
+## Your own dataset (`dataset: custom`)
+
+Any `torchvision.datasets.ImageFolder` tree works, at any resolution and class count:
+
+```
+<data_path>/
+  train/<class_name>/*.jpg
+  val/<class_name>/*.jpg      # must contain the image you want to misclassify
+```
+
+Point a config at it with `dataset: custom` and `data_path: <...>`. Resolution, normalization and
+class count are declared in the config or resolved from the data — nothing is hard-coded to CIFAR-10
+or ImageNet. Full walkthrough: `docs/CUSTOM_DATA.md`; example config: `configs/custom/my_attack.yaml`.
+The per-channel mean/std are computed once over `train/` and cached in `<data_path>/custom_stats.json`.

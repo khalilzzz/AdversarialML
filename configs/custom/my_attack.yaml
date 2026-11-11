@@ -1,0 +1,53 @@
+# Poison your own ImageFolder dataset with your own target.
+#
+# Lay the data out as:
+#   <data_path>/train/<class_name>/*.jpg
+#   <data_path>/val/<class_name>/*.jpg      (must contain your target image)
+#
+# Then find the target's validation index:
+#   python scripts/poison_custom.py --config configs/custom/my_attack.yaml --list-targets
+# and run the attack:
+#   python scripts/poison_custom.py --config configs/custom/my_attack.yaml \
+#          --target-index 1234 --adv-class 3 --export png
+#
+# Any field here is overridable on the command line with --set key=value; every override is recorded
+# in the result JSON and marks the run as a non-paper setting.
+
+name: my_attack
+dataset: custom
+data_path: C:/Users/khali/Desktop/mon_dataset   # the folder that contains train/ and val/
+
+# --- shape of the data ---
+image_size: 64              # square side; Resize + CenterCrop are applied to every image
+channels: 3
+# data_mean / data_std omitted -> computed once over train/ and cached in <data_path>/custom_stats.json
+augment_shift: 8            # translation budget in pixels; omitted -> round(image_size / 8)
+augment_flip: true
+num_classes_override: null  # omitted -> counted from the train/ folders
+
+# --- explicit target (set both; or leave null and use the seeded multi-case mode) ---
+target_index: null          # validation index of the image to misclassify (or pass --target-index)
+adv_class: null             # y_adv: the class it should be pushed to (or pass --adv-class)
+poison_class: null          # class the poisons are drawn from; null -> adv_class
+
+# --- threat model (your parameters) ---
+budget: 0.01                # fraction of the training set perturbed
+eps: 16.0                   # l_inf bound in 0..255 pixel units
+targets: 1
+
+# --- brewing (paper defaults, override freely) ---
+tau: 0.1
+restarts: 8
+attack_steps: 250
+objective: cosine           # cosine (eq. 3) | euclidean (eq. 2)
+ensemble: 1
+
+# --- model + victim ---
+net: ResNet18               # ResNet18 | ResNet34 | ConvNet | VGG11 | VGG16 | MobileNetV2
+width: 64
+epochs: 40
+victim_runs: 8
+victim_augment: true
+differentiable_augment: true
+
+save_poisons: png

@@ -25,8 +25,26 @@ class Config:
     notes: str = ""
 
     # --- data -----------------------------------------------------------
-    dataset: str = "CIFAR10"  # CIFAR10 | ImageNet
+    dataset: str = "CIFAR10"  # CIFAR10 | ImageNet | custom
     data_path: str = "data/raw"
+
+    # --- custom dataset (used only when dataset == "custom") ------------
+    # An arbitrary ImageFolder with <data_path>/{train,val}/<class>/*. Everything the paper datasets
+    # hard-code (resolution, normalization, class count) is declared here instead, or resolved from
+    # the data when left as None, so the attack is not tied to CIFAR-10 / ImageNet.
+    image_size: int | None = None  # square side; None -> 32 (CIFAR) / 224 (ImageNet)
+    channels: int = 3
+    data_mean: list[float] | None = None  # None -> computed once on train/ and cached
+    data_std: list[float] | None = None
+    augment_shift: int | None = None  # None -> round(image_size/8) (= 4 at 32, 28 at 224)
+    augment_flip: bool = True
+    num_classes_override: int | None = None  # None -> counted from the ImageFolder
+
+    # --- explicit single target (an alternative to the published case tables) ---
+    # When both are set, build_case ignores the paper tables and builds exactly this case.
+    target_index: int | None = None  # index into the validation set of the image to misclassify
+    adv_class: int | None = None  # y_adv: the label the target should be pushed to
+    poison_class: int | None = None  # class the poisons are drawn from; None -> adv_class
 
     # --- threat model (paper section 3.1) -------------------------------
     budget: float = 0.01  # fraction of the training set that is poisoned
@@ -96,6 +114,10 @@ class Config:
 
     # -------------------------------------------------------------------
     def __post_init__(self) -> None:
+        if self.dataset.lower() == "custom" and not self.data_path:
+            raise ValueError("dataset: custom requires data_path pointing at an ImageFolder root")
+        if self.poison_class is None:
+            self.poison_class = self.adv_class
         if self.victim_net is None:
             self.victim_net = self.net
         if self.lr is None:

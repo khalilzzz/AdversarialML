@@ -89,6 +89,16 @@ def build_case(
     dataset (always true for CIFAR-10). Otherwise everything is drawn from the published seed, which
     is the reference implementation's `random_construction`.
     """
+    # Path 1: an explicit target handed in by the config -- total control, one precise case, no
+    # published table consulted. This is what makes the attack usable on an arbitrary dataset.
+    if cfg.target_index is not None and cfg.adv_class is not None:
+        return _explicit_case(case_id, cfg, trainset, validset)
+
+    # Path 2: a custom dataset with no explicit target -- draw the class pair and the target from the
+    # seed, exactly as the reference implementation's `random_construction`, with no table.
+    if cfg.dataset.lower() == "custom":
+        return _random_case(case_id, cfg, trainset, validset)
+
     table = _published_cases(cfg.dataset)
     if case_id >= len(table):
         raise IndexError(f"case {case_id} out of range; the paper publishes {len(table)} cases")
@@ -140,6 +150,82 @@ def build_case(
         poison_ids=poison_ids,
         target_class_name=target_name,
         poison_class_name=poison_name,
+    )
+
+
+def _draw_poisons(rng, train_labels: np.ndarray, poison_class: int, budget: float, train_size: int) -> list[int]:
+    """Poison IDs: `ceil(budget*N)` images of the adversarial class (Alg. 1 line 3)."""
+    candidates = np.flatnonzero(train_labels == poison_class)
+    wanted = min(num_poisons(budget, train_size), len(candidates))
+    if wanted == 0:
+        raise ValueError(f"class {poison_class} has no training images to poison")
+    return sorted(int(i) for i in rng.choice(candidates, size=wanted, replace=False))
+
+
+def _class_name(dataset: IndexedDataset, idx: int) -> str:
+    names = getattr(dataset, "classes", [])
+    return names[idx] if 0 <= idx < len(names) else str(idx)
+
+
+def _explicit_case(case_id, cfg, trainset, validset) -> PoisonCase:
+    """Build exactly the case the config asks for: target image, y_adv, poison class."""
+    valid_labels = np.asarray(validset.targets)
+    train_labels = np.asarray(trainset.targets)
+    target_index = int(cfg.target_index)
+    if not 0 <= target_index < len(validset):
+        raise IndexError(f"target_index {target_index} out of range for {len(validset)} validation images")
+    poison_class = int(cfg.poison_class if cfg.poison_class is not None else cfg.adv_class)
+    seed = int(cfg.target_index) * 1_000_003 + int(cfg.adv_class)
+    rng = np.random.default_rng(seed % (2**32 - 1))
+
+    target_ids = [target_index]
+    if cfg.targets > 1:
+        # Extra targets share the original's true class, as in appendix F.8.
+        pool = np.flatnonzero(valid_labels == valid_labels[target_index])
+        remaining = np.setdiff1d(pool, np.asarray(target_ids))
+        if len(remaining) < cfg.targets - 1:
+            raise ValueError(f"target class has too few validation images for {cfg.targets} targets")
+        extra = rng.choice(remaining, size=cfg.targets - 1, replace=False)
+        target_ids = target_ids + sorted(int(i) for i in extra)
+
+    poison_ids = _draw_poisons(rng, train_labels, poison_class, cfg.budget, len(trainset))
+    return PoisonCase(
+        case_id=case_id,
+        seed=seed,
+        target_class=int(valid_labels[target_index]),
+        poison_class=poison_class,
+        target_ids=target_ids,
+        poison_ids=poison_ids,
+        target_class_name=_class_name(validset, int(valid_labels[target_index])),
+        poison_class_name=_class_name(trainset, poison_class),
+    )
+
+
+def _random_case(case_id, cfg, trainset, validset) -> PoisonCase:
+    """Draw a class pair and a target from the case seed (reference `random_construction`)."""
+    seed = (abs(hash(cfg.name)) % (2**31)) + case_id
+    rng = np.random.default_rng(seed % (2**32 - 1))
+    valid_labels = np.asarray(validset.targets)
+    train_labels = np.asarray(trainset.targets)
+    classes = len(set(train_labels.tolist()))
+    if classes < 2:
+        raise ValueError("need at least two classes to pick a target/poison pair")
+    target_class, poison_class = (int(c) for c in rng.choice(classes, size=2, replace=False))
+
+    pool = np.flatnonzero(valid_labels == target_class)
+    if len(pool) < cfg.targets:
+        raise ValueError(f"target class {target_class} has only {len(pool)} validation images")
+    target_ids = sorted(int(i) for i in rng.choice(pool, size=cfg.targets, replace=False))
+    poison_ids = _draw_poisons(rng, train_labels, poison_class, cfg.budget, len(trainset))
+    return PoisonCase(
+        case_id=case_id,
+        seed=int(seed),
+        target_class=target_class,
+        poison_class=poison_class,
+        target_ids=target_ids,
+        poison_ids=poison_ids,
+        target_class_name=_class_name(validset, target_class),
+        poison_class_name=_class_name(trainset, poison_class),
     )
 
 

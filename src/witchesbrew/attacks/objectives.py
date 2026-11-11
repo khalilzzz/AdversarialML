@@ -55,7 +55,7 @@ def _cosine_global(
 def _cosine_per_layer(
     poison_grad: list[torch.Tensor], target_grad: list[torch.Tensor]
 ) -> torch.Tensor:
-    """Mean of the per-parameter-tensor cosine similarities (the reference code's variant)."""
+    """Mean of the per-parameter-tensor cosine similarities (the reference's `cosine1` option)."""
     total = poison_grad[0].new_zeros(())
     for p, t in zip(poison_grad, target_grad):
         total = total + torch.nn.functional.cosine_similarity(p.flatten(), t.flatten(), dim=0)

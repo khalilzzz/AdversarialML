@@ -31,7 +31,7 @@ def test_config_loads(path: Path):
     assert cfg.cosine_mode in {"global", "per_layer"}
     assert cfg.target_criterion in {"cross-entropy", "carlini-wagner"}
     assert cfg.init in {"randn", "rand", "zero"}
-    assert cfg.dataset.upper() in {"CIFAR10", "IMAGENET"}
+    assert cfg.dataset.upper() in {"CIFAR10", "IMAGENET", "CUSTOM"}
     assert cfg.lr in {0.1, 0.01}  # appendix B.2 allows only these two
 
 

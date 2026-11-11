@@ -17,7 +17,7 @@ import torch
 from _cli import announce, build_parser, config_from_args
 
 from witchesbrew.attacks.brew import Brewer
-from witchesbrew.data.augment import build_augmentation
+from witchesbrew.data.augment import augmentation_for
 from witchesbrew.data.datasets import build_datasets
 from witchesbrew.data.setup import build_case
 from witchesbrew.evaluate import build_surrogate_ensemble
@@ -39,7 +39,7 @@ def main() -> None:
     announce(cfg)
 
     device = get_device(cfg.device)
-    trainset, validset = build_datasets(cfg.dataset, cfg.data_path)
+    trainset, validset = build_datasets(cfg.dataset, cfg.data_path, cfg)
     case = build_case(args.case, cfg, trainset, validset)
     print(
         f"case {case.case_id}: target '{case.target_class_name}' (id {case.target_ids}) "
@@ -63,7 +63,7 @@ def main() -> None:
         target_inputs,
         adv_labels,
         device,
-        augment=build_augmentation(cfg.dataset).to(device) if cfg.differentiable_augment else None,
+        augment=augmentation_for(cfg).to(device) if cfg.differentiable_augment else None,
     )
     delta, loss, per_restart = brewer.brew()
     print(f"B = {loss:.4f} after {timer.minutes():.1f} min; per restart {[round(v, 4) for v in per_restart]}")

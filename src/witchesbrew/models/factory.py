@@ -48,7 +48,15 @@ def build_model(
     pretrained: bool = False,
 ) -> nn.Module:
     key = name.lower().replace("-", "").replace("_", "")
-    cifar = dataset.upper() == "CIFAR10"
+    name_up = dataset.upper()
+    if name_up == "CUSTOM":
+        # Route by resolution: small images use the CIFAR stem (3x3, no max-pool), large images the
+        # standard torchvision downsampling stem.
+        from ..data.datasets import image_size as _image_size
+
+        cifar = _image_size(dataset) <= 64
+    else:
+        cifar = name_up == "CIFAR10"
 
     if cifar:
         if key == "resnet18":
@@ -112,7 +120,9 @@ def bypass_last_layer(model: nn.Module) -> tuple[nn.Module, nn.Module]:
 
 
 def feature_dim(model: nn.Module, dataset: str, device: torch.device) -> int:
-    size = 32 if dataset.upper() == "CIFAR10" else 224
+    from ..data.datasets import image_size as _image_size
+
+    size = _image_size(dataset)
     feature_model, _ = bypass_last_layer(model)
     with torch.no_grad():
         probe = torch.zeros(1, 3, size, size, device=device)

@@ -6,7 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "witchesbrew"
 version = "0.1.0"
 description = "Research reproduction of 'Witches' Brew: Industrial Scale Data Poisoning via Gradient Matching' (Geiping et al., ICLR 2021)"
-requires-python = ">=3.10"
+# 3.9 works: every module defers its annotations with `from __future__ import annotations`, and no
+# builtin generic or PEP 604 union is evaluated at runtime. 3.10+ is still preferred.
+requires-python = ">=3.9"
 dependencies = [
     "torch>=2.0",
     "torchvision>=0.15",

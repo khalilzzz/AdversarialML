@@ -19,7 +19,7 @@ from pathlib import Path
 import torch
 
 from .attacks.brew import Brewer
-from .data.augment import build_augmentation
+from .data.augment import augmentation_for
 from .data.datasets import build_datasets, make_loader, num_classes
 from .data.setup import PoisonCase, build_case
 from .defenses.dp import make_gradient_hook
@@ -82,7 +82,7 @@ def get_surrogate(cfg, trainset, validset, device: torch.device, seed: int) -> t
             "data_ablation": surrogate_ablation(cfg),
         }
     )
-    augment = build_augmentation(cfg.dataset).to(device)
+    augment = augmentation_for(cfg).to(device)
     train_model(pretrain_cfg, model, trainset, validset, device, augment=augment, seed=seed)
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), path)
@@ -109,10 +109,10 @@ def build_surrogate_ensemble(cfg, trainset, validset, device, seed) -> list[torc
 def run_case(cfg, case_id: int, device: torch.device | None = None) -> dict:
     """Brew one case and evaluate it on `cfg.victim_runs` fresh victims."""
     device = device or get_device(cfg.device)
-    trainset, validset = build_datasets(cfg.dataset, cfg.data_path)
+    trainset, validset = build_datasets(cfg.dataset, cfg.data_path, cfg)
     case: PoisonCase = build_case(case_id, cfg, trainset, validset)
     classes = num_classes(cfg.dataset)
-    augment = build_augmentation(cfg.dataset).to(device)
+    augment = augmentation_for(cfg).to(device)
 
     set_seed(case.seed)
     models = build_surrogate_ensemble(cfg, trainset, validset, device, case.seed)
@@ -230,10 +230,10 @@ def run_experiment(cfg, resume: bool = True) -> dict:
 def clean_baseline_accuracy(cfg, device: torch.device | None = None) -> float:
     """Unpoisoned validation accuracy, the left column of Table 10."""
     device = device or get_device(cfg.device)
-    trainset, validset = build_datasets(cfg.dataset, cfg.data_path)
+    trainset, validset = build_datasets(cfg.dataset, cfg.data_path, cfg)
     set_seed(1234)
     model = build_model(cfg.victim_net, cfg.dataset, num_classes(cfg.dataset), cfg.width).to(device)
-    augment = build_augmentation(cfg.dataset).to(device)
+    augment = augmentation_for(cfg).to(device)
     train_model(cfg, model, trainset, validset, device, augment=augment, seed=1234)
     loader = make_loader(validset, 256, shuffle=False, workers=available_workers(cfg.workers))
     return evaluate_accuracy(model, loader, device)
