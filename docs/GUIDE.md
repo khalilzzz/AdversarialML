@@ -535,3 +535,14 @@ Utile quand vous lisez un `.sh` de `paper_experiments/` et voulez le réglage é
 - La précision globale ne s'effondre pas, et c'est tout le point : attaque d'intégrité, pas de
   disponibilité.
 - Lisez `docs/DEVIATIONS.md` avant de comparer un seul chiffre au papier.
+
+## 8. Au-delà du papier
+
+Deux extensions hors-article vivent dans le dépôt, derrière des drapeaux à défaut neutre (le chemin
+du papier ne bouge pas) :
+
+- **Tes propres données** — `docs/CUSTOM_DATA.md` : mode `dataset: custom`, ImageFolder quelconque,
+  cible explicite ou aléatoire.
+- **Sonde fréquentielle (piste 1)** — `docs/FREQUENCY_PROBE.md` : où WB dépense son budget `ℓ∞` et ce
+  qui survit à la purification (JPEG, passe-bas DCT, débruitage), plus l'attaque WB-LF contrainte au
+  sous-espace conservé. Répond à la question ouverte de Hong et al. (2024).

@@ -21,7 +21,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, Subset
 
 from .data.augment import RandomTransform
-from .data.datasets import make_loader
+from .data.datasets import denormalization_tensors, make_loader
+from .defenses.purification import victim_purifier_normalized
 from .utils import available_workers
 
 
@@ -183,6 +184,10 @@ def train_model(
     history = TrainHistory()
     lookup = _poison_lookup(poison_ids)
     delta = poison_delta.to(device) if poison_delta is not None else None
+    # Victim-side purification defense (E2/E3): Psi is applied to the poisoned images at ingest, the
+    # way PureGen/PureEBM purify the dataset before training. None keeps the paper path untouched.
+    dm, ds = denormalization_tensors(cfg.dataset, device)
+    victim_purifier = victim_purifier_normalized(cfg, dm, ds)
 
     data = ablated_subset(trainset, cfg.data_ablation, seed)
     workers = available_workers(cfg.workers)
@@ -196,8 +201,13 @@ def train_model(
     epochs = 1 if cfg.dryrun else cfg.epochs
 
     def prepare(batch_inputs: torch.Tensor, batch_indices) -> torch.Tensor:
-        """Exactly what the victim feeds its network: poisons added, then augmentation."""
+        """Exactly what the victim feeds its network: poisons added, purified, then augmentation."""
         prepared = inject_poison(batch_inputs, batch_indices, delta, lookup, device)
+        if victim_purifier is not None:
+            # The defense purifies the stored (poisoned) image before normal training proceeds, so
+            # Psi sits before augmentation -- the PureGen pipeline order.
+            with torch.no_grad():
+                prepared = victim_purifier(prepared)
         if augment is not None and cfg.victim_augment:
             prepared = augment(prepared)
         return prepared

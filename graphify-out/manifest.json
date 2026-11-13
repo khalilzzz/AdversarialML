@@ -1,0 +1,236 @@
+{
+  "pyproject.toml": {
+    "mtime": 1791650612.9535954,
+    "seen": 1794412366.661552,
+    "ast_hash": "598d7852f63d11b769a34e297254ade4",
+    "semantic_hash": "598d7852f63d11b769a34e297254ade4"
+  },
+  "scripts/_cli.py": {
+    "mtime": 1791539778.5386076,
+    "seen": 1794412366.6615598,
+    "ast_hash": "de058dbc9d8b647d5b2240360af7e61c",
+    "semantic_hash": "de058dbc9d8b647d5b2240360af7e61c"
+  },
+  "scripts/aggregate.py": {
+    "mtime": 1791539870.4050388,
+    "seen": 1794412366.6615634,
+    "ast_hash": "be2e0e35e4546941492ba89a15a9b39b",
+    "semantic_hash": "be2e0e35e4546941492ba89a15a9b39b"
+  },
+  "scripts/brew_case.py": {
+    "mtime": 1794409310.9443526,
+    "seen": 1794412366.6615655,
+    "ast_hash": "16ff8af92da5378ab4f6f374464b27a2",
+    "semantic_hash": "16ff8af92da5378ab4f6f374464b27a2"
+  },
+  "scripts/plot.py": {
+    "mtime": 1791539902.2226384,
+    "seen": 1794412366.6615674,
+    "ast_hash": "28b8b3bf686337024610a5ef23e97828",
+    "semantic_hash": "28b8b3bf686337024610a5ef23e97828"
+  },
+  "scripts/poison_custom.py": {
+    "mtime": 1794409706.727115,
+    "seen": 1794412366.661569,
+    "ast_hash": "8336c34fa91bee2fa1ee8ec6d9160250",
+    "semantic_hash": "8336c34fa91bee2fa1ee8ec6d9160250"
+  },
+  "scripts/run_defense.py": {
+    "mtime": 1794409310.9609663,
+    "seen": 1794412366.6615708,
+    "ast_hash": "cbc8e4fb7dc88dc995c4ed530d1432ae",
+    "semantic_hash": "cbc8e4fb7dc88dc995c4ed530d1432ae"
+  },
+  "scripts/run_experiment.py": {
+    "mtime": 1791539786.8119912,
+    "seen": 1794412366.6615725,
+    "ast_hash": "a4988f17451b894a47397103f87a2ef2",
+    "semantic_hash": "a4988f17451b894a47397103f87a2ef2"
+  },
+  "scripts/sweep.py": {
+    "mtime": 1791539819.4703205,
+    "seen": 1794412366.661574,
+    "ast_hash": "8802a426755bdb974538456faddf28ec",
+    "semantic_hash": "8802a426755bdb974538456faddf28ec"
+  },
+  "src/witchesbrew/__init__.py": {
+    "mtime": 1791539625.2831209,
+    "seen": 1794412366.661575,
+    "ast_hash": "7a1ffd7d5f96007dc86bf195a097c4de",
+    "semantic_hash": "7a1ffd7d5f96007dc86bf195a097c4de"
+  },
+  "src/witchesbrew/attacks/__init__.py": {
+    "mtime": 1791539625.2902417,
+    "seen": 1794412366.6615767,
+    "ast_hash": "09c5a7d05b6bb22995910f5be69adf50",
+    "semantic_hash": "09c5a7d05b6bb22995910f5be69adf50"
+  },
+  "src/witchesbrew/attacks/brew.py": {
+    "mtime": 1791543447.9163508,
+    "seen": 1794412366.6615784,
+    "ast_hash": "bd3d8b4487b776414729d3a76f97b170",
+    "semantic_hash": "bd3d8b4487b776414729d3a76f97b170"
+  },
+  "src/witchesbrew/attacks/losses.py": {
+    "mtime": 1791539422.399325,
+    "seen": 1794412366.6615798,
+    "ast_hash": "fac34a700d56461f4fddb5c4b3008be6",
+    "semantic_hash": "fac34a700d56461f4fddb5c4b3008be6"
+  },
+  "src/witchesbrew/attacks/objectives.py": {
+    "mtime": 1793643221.685552,
+    "seen": 1794412366.6615813,
+    "ast_hash": "a040d3b84dde57f32dde379886473ad4",
+    "semantic_hash": "a040d3b84dde57f32dde379886473ad4"
+  },
+  "src/witchesbrew/config.py": {
+    "mtime": 1794409244.2925177,
+    "seen": 1794412366.661583,
+    "ast_hash": "a35415cdbb8b4b6019e74918195c5318",
+    "semantic_hash": "a35415cdbb8b4b6019e74918195c5318"
+  },
+  "src/witchesbrew/consts.py": {
+    "mtime": 1791539265.271941,
+    "seen": 1794412366.6615844,
+    "ast_hash": "143055d3ca30b3b17e9887238ce50ace",
+    "semantic_hash": "143055d3ca30b3b17e9887238ce50ace"
+  },
+  "src/witchesbrew/data/__init__.py": {
+    "mtime": 1791539625.2892418,
+    "seen": 1794412366.6615858,
+    "ast_hash": "ff6670c414fd892868a3f11936d332d5",
+    "semantic_hash": "ff6670c414fd892868a3f11936d332d5"
+  },
+  "src/witchesbrew/data/augment.py": {
+    "mtime": 1794409297.8801553,
+    "seen": 1794412366.6615875,
+    "ast_hash": "9f96085f58d9e4a4229d48bf160b952e",
+    "semantic_hash": "9f96085f58d9e4a4229d48bf160b952e"
+  },
+  "src/witchesbrew/data/datasets.py": {
+    "mtime": 1794409283.4668286,
+    "seen": 1794412366.6615891,
+    "ast_hash": "28977d12715f7d72d25adf6b8882efe4",
+    "semantic_hash": "28977d12715f7d72d25adf6b8882efe4"
+  },
+  "src/witchesbrew/data/setup.py": {
+    "mtime": 1794409335.8686876,
+    "seen": 1794412366.6615908,
+    "ast_hash": "c1fc271b592fe9e7e378d95bf573d899",
+    "semantic_hash": "c1fc271b592fe9e7e378d95bf573d899"
+  },
+  "src/witchesbrew/defenses/__init__.py": {
+    "mtime": 1791539625.2912433,
+    "seen": 1794412366.6615922,
+    "ast_hash": "405845d125769c9ea74b48ec98f4ef7c",
+    "semantic_hash": "405845d125769c9ea74b48ec98f4ef7c"
+  },
+  "src/witchesbrew/defenses/dp.py": {
+    "mtime": 1791539641.0726125,
+    "seen": 1794412366.6615937,
+    "ast_hash": "9926741779a7092e76a23e031d6adff8",
+    "semantic_hash": "9926741779a7092e76a23e031d6adff8"
+  },
+  "src/witchesbrew/defenses/filtering.py": {
+    "mtime": 1791539656.5649576,
+    "seen": 1794412366.6615958,
+    "ast_hash": "f8d9b0fc64338779a924790817ef49ee",
+    "semantic_hash": "f8d9b0fc64338779a924790817ef49ee"
+  },
+  "src/witchesbrew/diagnostics.py": {
+    "mtime": 1791542719.5554347,
+    "seen": 1794412366.6615977,
+    "ast_hash": "5f2516760c20746855cd73ffcba2fe71",
+    "semantic_hash": "5f2516760c20746855cd73ffcba2fe71"
+  },
+  "src/witchesbrew/evaluate.py": {
+    "mtime": 1794409310.9248378,
+    "seen": 1794412366.661599,
+    "ast_hash": "92c37b457a37f5e9ec5b6c860febb893",
+    "semantic_hash": "92c37b457a37f5e9ec5b6c860febb893"
+  },
+  "src/witchesbrew/export.py": {
+    "mtime": 1791539692.8244388,
+    "seen": 1794412366.6616006,
+    "ast_hash": "7062e1431db3d34ddff35314f00a3b1e",
+    "semantic_hash": "7062e1431db3d34ddff35314f00a3b1e"
+  },
+  "src/witchesbrew/models/__init__.py": {
+    "mtime": 1791539625.2892418,
+    "seen": 1794412366.6616018,
+    "ast_hash": "7a5666ceaabf2e7434a1506d07aaee02",
+    "semantic_hash": "7a5666ceaabf2e7434a1506d07aaee02"
+  },
+  "src/witchesbrew/models/convnet.py": {
+    "mtime": 1791539395.257885,
+    "seen": 1794412366.6616037,
+    "ast_hash": "d4801cc87dace0fc0515d9b91e8bb9ed",
+    "semantic_hash": "d4801cc87dace0fc0515d9b91e8bb9ed"
+  },
+  "src/witchesbrew/models/factory.py": {
+    "mtime": 1794409349.979062,
+    "seen": 1794412366.661605,
+    "ast_hash": "864a9b8a7cc42177026ef2f31ab77e68",
+    "semantic_hash": "864a9b8a7cc42177026ef2f31ab77e68"
+  },
+  "src/witchesbrew/models/resnet.py": {
+    "mtime": 1791539385.9707675,
+    "seen": 1794412366.661606,
+    "ast_hash": "549674e7cc63d899fafc23a7455b9a71",
+    "semantic_hash": "549674e7cc63d899fafc23a7455b9a71"
+  },
+  "src/witchesbrew/train.py": {
+    "mtime": 1791542707.9390419,
+    "seen": 1794412366.6616075,
+    "ast_hash": "3ee1d1ce91d773a6e880cb3c3a8d42b2",
+    "semantic_hash": "3ee1d1ce91d773a6e880cb3c3a8d42b2"
+  },
+  "src/witchesbrew/utils.py": {
+    "mtime": 1791539305.7401881,
+    "seen": 1794412366.661609,
+    "ast_hash": "0914ed6b875c73fa99c58c3b8dbf4dc3",
+    "semantic_hash": "0914ed6b875c73fa99c58c3b8dbf4dc3"
+  },
+  "tests/conftest.py": {
+    "mtime": 1791539955.6194842,
+    "seen": 1794412366.6616101,
+    "ast_hash": "9ccffccc44dff201deb52d449805ed6b",
+    "semantic_hash": "9ccffccc44dff201deb52d449805ed6b"
+  },
+  "tests/test_brew.py": {
+    "mtime": 1791542896.7189388,
+    "seen": 1794412366.6616116,
+    "ast_hash": "926b322aea904ebe7ea61e794b2824da",
+    "semantic_hash": "926b322aea904ebe7ea61e794b2824da"
+  },
+  "tests/test_components.py": {
+    "mtime": 1791540030.9049854,
+    "seen": 1794412366.661613,
+    "ast_hash": "712e8d00f8764bd31d3efc22fdf9128e",
+    "semantic_hash": "712e8d00f8764bd31d3efc22fdf9128e"
+  },
+  "tests/test_configs.py": {
+    "mtime": 1794409474.1088505,
+    "seen": 1794412366.6616144,
+    "ast_hash": "96a8ffee4a7bd0b4281dba8695c44dd0",
+    "semantic_hash": "96a8ffee4a7bd0b4281dba8695c44dd0"
+  },
+  "tests/test_custom.py": {
+    "mtime": 1794409508.6090379,
+    "seen": 1794412366.6616156,
+    "ast_hash": "741fd4e1209bbce237997391f0fdb0bf",
+    "semantic_hash": "741fd4e1209bbce237997391f0fdb0bf"
+  },
+  "tests/test_diagnostics.py": {
+    "mtime": 1791543271.846235,
+    "seen": 1794412366.661617,
+    "ast_hash": "15a6732633f9b8396ea1956556e26535",
+    "semantic_hash": "15a6732633f9b8396ea1956556e26535"
+  },
+  "tests/test_pipeline.py": {
+    "mtime": 1791543317.094222,
+    "seen": 1794412366.6616187,
+    "ast_hash": "ce924287278d053b943aa4423227cc88",
+    "semantic_hash": "ce924287278d053b943aa4423227cc88"
+  }
+}

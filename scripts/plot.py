@@ -13,6 +13,10 @@ Figures land in `results/figures/`. Which paper figure each subcommand correspon
 * `target`    -- Fig. 9 (target loss and accuracy under the adversarial and the original label).
 * `dp`        -- Fig. 4b (poison success and validation accuracy against gradient noise).
 * `filtering` -- Fig. 4a (feature-distance histograms) as a bar comparison of what filtering catches.
+* `frequency` -- the piste-1 probe: radial DCT profile and per-Psi budget survival, WB vs WB-LF
+                 (research extension, not a paper figure; see docs/FREQUENCY_PROBE.md).
+* `tradeoff`  -- the E3 curve: poison success vs. low-frequency cutoff, and success against
+                 detectability / visibility (research extension; see docs/FREQUENCY_PROBE.md).
 """
 
 from __future__ import annotations
@@ -161,6 +165,81 @@ def plot_filtering(args) -> None:
     _save(fig, "filtering.png")
 
 
+def plot_frequency(args) -> None:
+    """Radial DCT profile and per-Psi survival; overlays WB-LF when a second file is given."""
+    files = [("WB", args.file)] + ([("WB-LF", args.lowfreq)] if args.lowfreq else [])
+    data = {label: json.loads(Path(path).read_text(encoding="utf-8")) for label, path in files}
+
+    fig, (ax_spec, ax_surv) = plt.subplots(1, 2, figsize=(11, 4))
+    for label, d in data.items():
+        ax_spec.plot(d["radial_dct_profile"], label=label)
+    ax_spec.set_xlabel("radial DCT frequency bin")
+    ax_spec.set_ylabel("fraction of perturbation energy")
+    ax_spec.set_title("Where the budget is spent")
+    ax_spec.legend()
+    ax_spec.grid(alpha=0.3)
+
+    psis = list(next(iter(data.values()))["per_psi"].keys())
+    width = 0.8 / len(data)
+    for k, (label, d) in enumerate(data.items()):
+        values = [d["per_psi"][p]["budget_survival"] for p in psis]
+        ax_surv.bar([i + k * width for i in range(len(psis))], values, width, label=label)
+    ax_surv.set_xticks([i + width * (len(data) - 1) / 2 for i in range(len(psis))])
+    ax_surv.set_xticklabels(psis)
+    ax_surv.axhline(1.0, color="gray", ls="--", lw=0.8)
+    ax_surv.set_ylabel("budget survival (fraction)")
+    ax_surv.set_title("Budget surviving each purifier")
+    ax_surv.legend()
+    ax_surv.grid(alpha=0.3, axis="y")
+    _save(fig, "frequency.png")
+
+
+def plot_tradeoff(args) -> None:
+    """E3: success vs low-frequency cutoff, and success against detectability and visibility."""
+    rows = json.loads(Path(args.file).read_text(encoding="utf-8"))
+
+    def cutoff_x(r):
+        return r["cutoff"] if r["cutoff"] is not None else max(
+            (x["cutoff"] for x in rows if x["cutoff"] is not None), default=0
+        ) + 4  # draw the full-WB point just past the largest cutoff
+
+    fig, (ax_c, ax_d) = plt.subplots(1, 2, figsize=(11, 4))
+
+    by_eps: dict = {}
+    for r in rows:
+        by_eps.setdefault(r["eps"], []).append(r)
+    for eps, group in sorted(by_eps.items()):
+        group = sorted(group, key=cutoff_x)
+        ax_c.errorbar(
+            [cutoff_x(r) for r in group],
+            [r["success"] for r in group],
+            yerr=[r.get("stderr", 0) for r in group],
+            marker="o", capsize=3, label=f"eps={eps:g}",
+        )
+    ax_c.set_xlabel("low-frequency cutoff (full WB = rightmost)")
+    ax_c.set_ylabel("poison success (%)")
+    ax_c.set_title("Success vs frequency cutoff")
+    ax_c.legend()
+    ax_c.grid(alpha=0.3)
+
+    # Success against the two costs: detectability (off-manifold energy) and visibility (1 - SSIM).
+    ax_d.scatter(
+        [r["offmanifold_hf"] for r in rows], [r["success"] for r in rows],
+        c="firebrick", label="detectability (off-manifold)",
+    )
+    twin = ax_d.twiny()
+    twin.scatter(
+        [r["visibility"] for r in rows], [r["success"] for r in rows],
+        c="navy", marker="s", label="visibility (1 - SSIM)",
+    )
+    ax_d.set_xlabel("off-manifold energy fraction", color="firebrick")
+    twin.set_xlabel("visibility (1 - SSIM)", color="navy")
+    ax_d.set_ylabel("poison success (%)")
+    ax_d.set_title("Success vs detectability / visibility")
+    ax_d.grid(alpha=0.3)
+    _save(fig, "tradeoff.png")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -186,6 +265,15 @@ def main() -> None:
     p = sub.add_parser("filtering")
     p.add_argument("--file", required=True)
     p.set_defaults(func=plot_filtering)
+
+    p = sub.add_parser("frequency")
+    p.add_argument("--file", required=True, help="frequency_probe.json (WB)")
+    p.add_argument("--lowfreq", default=None, help="a second frequency_probe.json (WB-LF) to overlay")
+    p.set_defaults(func=plot_frequency)
+
+    p = sub.add_parser("tradeoff")
+    p.add_argument("--file", required=True, help="tradeoff.json from scripts/tradeoff.py")
+    p.set_defaults(func=plot_tradeoff)
 
     args = parser.parse_args()
     args.func(args)

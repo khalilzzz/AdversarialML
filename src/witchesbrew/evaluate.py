@@ -18,6 +18,7 @@ from pathlib import Path
 
 import torch
 
+from .analysis.spectrum import delta_report
 from .attacks.brew import Brewer
 from .data.augment import augmentation_for
 from .data.datasets import build_datasets, make_loader, num_classes
@@ -80,6 +81,9 @@ def get_surrogate(cfg, trainset, validset, device: torch.device, seed: int) -> t
             **cfg.to_dict(),
             "epochs": cfg.pretrain_epochs,
             "data_ablation": surrogate_ablation(cfg),
+            # theta must come from a *clean* model: the purification defense (E2/E3) is a victim-time
+            # measure, so it must never touch the surrogate that supplies the fixed gradient.
+            "purify": "none",
         }
     )
     augment = augmentation_for(cfg).to(device)
@@ -141,6 +145,9 @@ def run_case(cfg, case_id: int, device: torch.device | None = None) -> dict:
     )
     delta, brew_loss, per_restart = brewer.brew()
     brew_minutes = timer.minutes()
+    # E3: where the budget landed, for the success/detectability/visibility trade-off. Cheap, on the
+    # brewed delta; the cutoff is the low-frequency subspace boundary (same one WB-LF projects onto).
+    delta_metrics = delta_report(delta, clean_poisons, cfg.dataset, cfg.lowfreq_cutoff)
 
     victim_results = []
     runs = 1 if cfg.dryrun else cfg.victim_runs
@@ -192,6 +199,7 @@ def run_case(cfg, case_id: int, device: torch.device | None = None) -> dict:
         "victims": victim_results,
         "case_success": sum(successes) / max(1, len(successes)),
         "mean_valid_acc": sum(r["valid_acc"] for r in victim_results) / max(1, len(victim_results)),
+        "delta_metrics": delta_metrics,
         "paper_setting": cfg.is_paper_setting,
     }
 

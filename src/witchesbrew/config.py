@@ -101,6 +101,26 @@ class Config:
     # well ("pretrained + victim ablation").
     ablate_surrogate: bool = False
 
+    # --- purification-aware frequency probe (research, NOT the paper) ---
+    # Piste 1: does WB spend its l_inf budget in a subspace (high frequency / off-manifold) that
+    # purification erases? `delta_param: lowfreq` (E1) constrains the perturbation to the preserved
+    # low-frequency DCT subspace; `purify` selects the synthetic Psi used by the diagnostic (E0).
+    delta_param: str = "full"  # full | lowfreq
+    lowfreq_cutoff: int = 12  # keep the top-left n x n DCT coefficients (n in {8,12,16} on 32)
+    subspace_project_iters: int = 3  # alternating-projection (Dykstra) sweeps for lowfreq
+    purify: str = "none"  # none | jpeg | dct | gaussian -- victim-side defense applied at ingest
+    jpeg_quality: int = 75
+    purify_cutoff: int = 12  # DCT low-pass cutoff for purify == dct
+    purify_sigma: float = 0.25  # noise level of the one-step Gaussian denoiser
+    purify_eot: int = 1  # EOT samples over the randomness of Psi
+    # E2 (WB-Psi): brew *through* a differentiable Psi (BPDA for jpeg, EOT for the stochastic ones),
+    # so the perturbation is matched on Psi(x+delta) rather than (x+delta). `brew_purify` selects the
+    # brewing-time Psi; `purify` above stays the separate victim-side defense, so one can brew against
+    # one operator and evaluate under another (adaptive vs. transfer). Neutral default keeps the
+    # paper path untouched.
+    brew_purify: str = "none"  # none | jpeg | dct | gaussian
+    brew_purify_eot: int = 1  # EOT draws for the brewing-time Psi (stochastic operators)
+
     # --- runtime --------------------------------------------------------
     device: str = "auto"
     workers: int = 2

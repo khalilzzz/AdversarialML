@@ -1,0 +1,17 @@
+cd /Data && mkdir -p /Data/khl && cd /Data/khl && \
+{ git clone https://github.com/khalilzzz/AdversarialML || echo "repo deja la"; } && \
+cd AdversarialML && { [ -d witches_brew ] && cd witches_brew || true; } && \
+export PIP_CACHE_DIR=/Data/khl/.cache/pip && \
+export XDG_CACHE_HOME=/Data/khl/.cache && \
+export TORCH_HOME=/Data/khl/.cache/torch && \
+mkdir -p "$PIP_CACHE_DIR" "$TORCH_HOME" && \
+python3 -m venv /Data/khl/.venv && source /Data/khl/.venv/bin/activate && \
+python -m pip install --upgrade pip && \
+pip install -r requirements.txt && pip install -e . && \
+python -c "import torch; print('cuda:', torch.cuda.is_available())" && \
+python scripts/brew_case.py --config cifar10/baseline.yaml --case 0 --export packed --set name=wb_full && \
+python scripts/brew_case.py --config cifar10/baseline.yaml --case 0 --export packed --set name=wb_lf --set delta_param=lowfreq --set lowfreq_cutoff=12 && \
+python scripts/diagnose_frequency.py --config cifar10/baseline.yaml --set name=wb_full --poisons poisons/wb_full_case00 && \
+python scripts/diagnose_frequency.py --config cifar10/baseline.yaml --set name=wb_lf --set delta_param=lowfreq --poisons poisons/wb_lf_case00 && \
+python scripts/plot.py frequency --file results/wb_full/frequency_probe.json --lowfreq results/wb_lf/frequency_probe.json && \
+echo "DONE -> $(pwd)/results/figures/frequency.png"

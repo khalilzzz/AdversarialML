@@ -77,6 +77,8 @@ def gradient_matching_loss(
     cosine_mode: str = "global",
     train_criterion: torch.nn.Module | None = None,
     gradient_hook=None,
+    purifier=None,
+    eot: int = 1,
 ) -> torch.Tensor:
     """`B(Delta, theta)` of eq. 3, differentiable w.r.t. `inputs`.
 
@@ -88,11 +90,27 @@ def gradient_matching_loss(
     the per-example gradients. Eq. 3 writes a sum and eq. 2 writes the mean `(1/P) sum`; for the
     cosine objective the difference is a positive scale factor and therefore invisible, and for the
     Euclidean objective the mean is what eq. 2 asks for.
+
+    E2 (WB-Psi): when `purifier` is given the poison gradient is taken on `Psi(inputs)` and averaged
+    over `eot` fresh draws of Psi -- the expectation `E_xi [ sum_i grad l(Psi_xi(x_i+delta_i)) ]`
+    sits *inside* the cosine, so the brewer matches the gradient the purifying victim will actually
+    produce. The graph is kept through Psi (BPDA for jpeg), so dB/dDelta propagates through it.
     """
     criterion = train_criterion or torch.nn.CrossEntropyLoss()
     params = [p for p in model.parameters() if p.requires_grad]
-    loss = criterion(model(inputs), labels)
-    poison_grad = list(torch.autograd.grad(loss, params, create_graph=True))
+    if purifier is None:
+        loss = criterion(model(inputs), labels)
+        poison_grad = list(torch.autograd.grad(loss, params, create_graph=True))
+    else:
+        accumulated: list[torch.Tensor] | None = None
+        draws = max(1, eot)
+        for _ in range(draws):
+            loss = criterion(model(purifier(inputs)), labels)
+            grad = torch.autograd.grad(loss, params, create_graph=True)
+            accumulated = (
+                list(grad) if accumulated is None else [a + g for a, g in zip(accumulated, grad)]
+            )
+        poison_grad = [g / draws for g in accumulated]
 
     if gradient_hook is not None:
         # Appendix F.3's attacker-aware counter-attack: the attacker applies the defense's own

@@ -42,6 +42,7 @@ the input, which is what makes the method cheap enough to scale.
 docs/
   GUIDE.md              start here: the two codebases, what validating the paper means, what to run first
   CUSTOM_DATA.md        poison your own ImageFolder dataset, your own target, your own parameters
+  FREQUENCY_PROBE.md    research extension (piste 1): where WB spends its l_inf budget vs purification
   PAPER_NOTES.md        the paper, summarized: threat model, eqs. 1-4, Alg. 1, Prop. 1, every result
   DESIGN_DECISIONS.md   every choice -> value -> source (paper section / reference code / assumption)
   EXPERIMENTS.md        one row per published number: config, command, what to expect
@@ -58,7 +59,7 @@ src/witchesbrew/
   evaluate.py           the appendix B protocol: 10 cases x 8 victims, mean +- standard error
   defenses/             differential privacy (Fig. 4b), outlier filtering (Fig. 4a, Table 6)
   diagnostics.py        gradient alignment (Figs. 2, 11), the eq. 4 bound (Fig. 5)
-scripts/                run_experiment, sweep, brew_case, run_defense, aggregate, plot, poison_custom
+scripts/                run_experiment, sweep, brew_case, run_defense, aggregate, plot, poison_custom, diagnose_frequency
 tests/
   test_components.py    threat model, augmentation, objectives, architectures, config
   test_brew.py          Algorithm 1 really lowers B and respects the eps bound

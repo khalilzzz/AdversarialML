@@ -27,6 +27,8 @@ import torch
 
 from ..data.augment import RandomTransform
 from ..data.datasets import denormalization_tensors
+from ..defenses.purification import brew_purifier_normalized
+from .lowfreq import subspace_project
 from .objectives import (
     bullseye_loss,
     gradient_matching_loss,
@@ -133,6 +135,11 @@ class Brewer:
         self.augment = augment
         self.gradient_hook = gradient_hook
         self.bounds = PoisonBounds(cfg.eps, cfg.dataset, device)
+        # E1: confine the perturbation to the low-frequency subspace via alternating projection.
+        self.lowfreq = getattr(cfg, "delta_param", "full") == "lowfreq"
+        # E2: brew through a differentiable Psi (None when brew_purify is off -> paper path).
+        self.brew_purifier = brew_purifier_normalized(cfg, self.bounds.dm, self.bounds.ds)
+        self.brew_eot = max(1, getattr(cfg, "brew_purify_eot", 1))
         self.criterion = torch.nn.CrossEntropyLoss()
         # Projection needs the clean images on the compute device every step; cache one copy
         # instead of re-sending the whole stack each time.
@@ -172,6 +179,8 @@ class Brewer:
                 cosine_mode=self.cfg.cosine_mode,
                 train_criterion=self.criterion,
                 gradient_hook=self.gradient_hook,
+                purifier=self.brew_purifier,
+                eot=self.brew_eot,
             )
         if recipe == "poison-frogs":
             return poison_frogs_loss(model, inputs, self.target_inputs)
@@ -230,6 +239,11 @@ class Brewer:
     def _run_trial(self) -> tuple[torch.Tensor, float]:
         cfg = self.cfg
         delta = initialize_delta(tuple(self.clean.shape), self.bounds, cfg.init, self.device)
+        if self.lowfreq:
+            # Start inside the subspace so every step stays in it after projection.
+            delta = subspace_project(
+                delta, self._clean_device, self.bounds, cfg.lowfreq_cutoff, cfg.subspace_project_iters
+            )
         delta.requires_grad_(True)
 
         # Section 3.3 / Alg. 1 line 9: signed Adam. The reference scales tau by the poison batch
@@ -252,7 +266,13 @@ class Brewer:
             if cfg.attack_scheduling:
                 scheduler.step()
             with torch.no_grad():
-                delta.data = self.bounds.project(delta.data, self._clean_device)
+                if self.lowfreq:
+                    delta.data = subspace_project(
+                        delta.data, self._clean_device, self.bounds,
+                        cfg.lowfreq_cutoff, cfg.subspace_project_iters,
+                    )
+                else:
+                    delta.data = self.bounds.project(delta.data, self._clean_device)
         final = delta.detach()
         return final, self._measure(final)
 
