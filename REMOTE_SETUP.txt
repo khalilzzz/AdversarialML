@@ -8,9 +8,27 @@ python3 -m venv /Data/khl/.venv && source /Data/khl/.venv/bin/activate && \
 python -m pip install --upgrade pip && \
 pip install -r requirements.txt && pip install -e . && \
 python -c "import torch; print('cuda:', torch.cuda.is_available())" && \
-python scripts/brew_case.py --config cifar10/baseline.yaml --case 0 --export packed --set name=wb_full && \
-python scripts/brew_case.py --config cifar10/baseline.yaml --case 0 --export packed --set name=wb_lf --set delta_param=lowfreq --set lowfreq_cutoff=12 && \
-python scripts/diagnose_frequency.py --config cifar10/baseline.yaml --set name=wb_full --poisons poisons/wb_full_case00 && \
-python scripts/diagnose_frequency.py --config cifar10/baseline.yaml --set name=wb_lf --set delta_param=lowfreq --poisons poisons/wb_lf_case00 && \
-python scripts/plot.py frequency --file results/wb_full/frequency_probe.json --lowfreq results/wb_lf/frequency_probe.json && \
-echo "DONE -> $(pwd)/results/figures/frequency.png"
+mkdir -p /Data/khl/imagenet_dl && cd /Data/khl/imagenet_dl && \
+[ -f imagenet-object-localization-challenge.zip ] || kaggle competitions download -c imagenet-object-localization-challenge && \
+[ -d ILSVRC ] || unzip -q imagenet-object-localization-challenge.zip && \
+cd /Data/khl/AdversarialML && mkdir -p data/imagenet/val && \
+[ -e data/imagenet/train ] || ln -s /Data/khl/imagenet_dl/ILSVRC/Data/CLS-LOC/train data/imagenet/train && \
+{ [ $(ls data/imagenet/val 2>/dev/null | wc -l) -ge 1000 ] || python3 -c "import csv,os,shutil; S='/Data/khl/imagenet_dl/ILSVRC/Data/CLS-LOC/val'; D='data/imagenet/val'; rows=list(csv.reader(open('/Data/khl/imagenet_dl/LOC_val_solution.csv')))[1:]; [ (os.makedirs(D+'/'+r[1].split()[0], exist_ok=True), shutil.move(S+'/'+r[0]+'.JPEG', D+'/'+r[1].split()[0]+'/'+r[0]+'.JPEG')) for r in rows if os.path.exists(S+'/'+r[0]+'.JPEG') ]; print('val sorted')"; } && \
+echo "train classes: $(ls data/imagenet/train | wc -l)  val classes: $(ls data/imagenet/val | wc -l)" && \
+python scripts/brew_case.py --config imagenet/frequency.yaml --case 0 --export packed --set name=inet_wb_full --set poison_batch_size=192 && \
+python scripts/brew_case.py --config imagenet/frequency.yaml --case 0 --export packed --set name=inet_wb_lf --set delta_param=lowfreq --set poison_batch_size=192 && \
+python scripts/diagnose_frequency.py --config imagenet/frequency.yaml --set name=inet_wb_full --poisons poisons/inet_wb_full_case00 && \
+python scripts/diagnose_frequency.py --config imagenet/frequency.yaml --set name=inet_wb_lf --set delta_param=lowfreq --poisons poisons/inet_wb_lf_case00 && \
+python scripts/plot.py frequency --file results/inet_wb_full/frequency_probe.json --lowfreq results/inet_wb_lf/frequency_probe.json && \
+echo "DONE -> $(pwd)/results/figures/frequency.png" 
+
+# On a 24 GB RTX 3090 you may speed brewing up with:  --set poison_batch_size=192
+# On a 16 GB card (RTX 2000 Ada / A4000) instead use:  --set poison_batch_size=64
+
+# ----------------------------------------------------------------------------------------------
+# OPTIONAL -- Partie B (victim success under a defense). Victim trains FROM SCRATCH on full
+# ImageNet (1.28M images x 40 epochs ~= 10-20 h per victim on a 3090). Only run with GPU time to
+# spare; for a high-res victim that finishes in minutes use Imagenette (dataset: custom) instead.
+# python scripts/run_experiment.py --config imagenet/baseline.yaml --set name=inet_full_clean --set workers=16
+# python scripts/run_experiment.py --config imagenet/baseline.yaml --set name=inet_full_jpeg --set purify=jpeg --set workers=16
+# python scripts/run_experiment.py --config imagenet/baseline.yaml --set name=inet_lf_jpeg --set delta_param=lowfreq --set lowfreq_cutoff=84 --set purify=jpeg --set brew_purify=jpeg --set workers=16

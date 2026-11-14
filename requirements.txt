@@ -7,3 +7,4 @@ matplotlib>=3.7
 tqdm>=4.65
 pytest>=7.4
 kaggle>=1.6  # ImageNet (ILSVRC2012) download via the Kaggle competition CLI
+six>=1.16  # kaggle imports six but does not pin it; required on Python 3.13
