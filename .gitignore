@@ -7,3 +7,4 @@ data/imagenet/
 results/
 poisons/
 checkpoints/
+REMOTE_SETUP.txt

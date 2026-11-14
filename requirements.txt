@@ -6,3 +6,4 @@ pandas>=2.0
 matplotlib>=3.7
 tqdm>=4.65
 pytest>=7.4
+kaggle>=1.6  # ImageNet (ILSVRC2012) download via the Kaggle competition CLI
