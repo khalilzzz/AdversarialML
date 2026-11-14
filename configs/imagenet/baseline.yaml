@@ -1,0 +1,22 @@
+# ImageNet poisoning baseline: ResNet-18, 0.1% budget, eps=16, gradient matching, R=8, M=250, K=1.
+# The surrogate theta is torchvision's pretrained ResNet-18 (appendix B.2); victims are trained from
+# scratch on the poisoned data. Full-ImageNet victim training is expensive (the paper used multiple
+# GPUs; see docs/DEVIATIONS.md), so victim_runs is 1. Expects the dataset at
+# <data_path>/imagenet/{train,val}/<synset>/*.JPEG.
+name: imagenet_baseline
+dataset: ImageNet
+data_path: data
+net: ResNet18
+victim_net: ResNet18
+pretrained: true
+budget: 0.001
+eps: 16.0
+cases: 10
+victim_runs: 1
+restarts: 8
+attack_steps: 250
+ensemble: 1
+# 224px brewing differentiates twice through ResNet-18; 128 keeps a 24 GB card inside its budget.
+poison_batch_size: 128
+batch_size: 128
+workers: 8

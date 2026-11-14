@@ -1,0 +1,30 @@
+# Piste 1 (frequency probe) on ImageNet -- research extension, NOT the paper.
+#
+# Thesis: Witches' Brew spends its l_inf budget in a high-frequency / off-manifold subspace that
+# purification erases. This config brews one ImageNet case so the spectrum of delta and its survival
+# under each purifier Psi can be measured (E0), and a low-frequency-confined variant can be brewed
+# for comparison (E1, pass --set delta_param=lowfreq).
+#
+# Cutoffs are scaled from the CIFAR-10 setting (cutoff 12 on a 32px image = ratio 0.375) up to 224px:
+# 0.375 * 224 ~= 84. Keep lowfreq_cutoff and purify_cutoff in step so the subspace the attack is
+# confined to (E1) matches the subspace the DCT purifier keeps (E0).
+name: imagenet_frequency
+dataset: ImageNet
+data_path: data
+net: ResNet18
+victim_net: ResNet18
+pretrained: true
+budget: 0.001
+eps: 16.0
+cases: 1
+restarts: 4
+attack_steps: 250
+ensemble: 1
+poison_batch_size: 128
+workers: 8
+# --- frequency probe knobs (neutral defaults elsewhere; set here for the 224px study) ---
+delta_param: full          # full = plain WB (E0); override to lowfreq for WB-LF (E1)
+lowfreq_cutoff: 84         # keep the top-left 84x84 DCT coefficients of a 224x224 image
+purify_cutoff: 84          # the dct purifier keeps the same subspace, for a like-for-like comparison
+purify_sigma: 0.1          # one-step gaussian denoise noise level (lower than CIFAR's 0.25)
+purify_eot: 1

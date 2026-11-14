@@ -1,6 +1,5 @@
 cd /Data && mkdir -p /Data/khl && cd /Data/khl && \
-{ git clone https://github.com/khalilzzz/AdversarialML || echo "repo deja la"; } && \
-cd AdversarialML && { [ -d witches_brew ] && cd witches_brew || true; } && \
+git clone https://github.com/khalilzzz/AdversarialML 2>/dev/null; cd /Data/khl/AdversarialML && git pull --ff-only && \
 export PIP_CACHE_DIR=/Data/khl/.cache/pip && \
 export XDG_CACHE_HOME=/Data/khl/.cache && \
 export TORCH_HOME=/Data/khl/.cache/torch && \
