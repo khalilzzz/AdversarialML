@@ -134,6 +134,9 @@ class Config:
     checkpoint_dir: str = "checkpoints"
     save_poisons: str | None = None  # None | packed | png | imagefolder
     diagnostics: bool = False
+    # Print a per-epoch line (loss, train acc, val acc, target adversarial acc) during victim
+    # training, and measure the validation accuracy every epoch instead of only on the last one.
+    progress: bool = False
     dryrun: bool = False
     overrides: dict[str, Any] = field(default_factory=dict)
 

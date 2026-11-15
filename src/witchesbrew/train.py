@@ -240,16 +240,29 @@ def train_model(
         history.train_acc.append(correct / max(1, seen))
 
         last = epoch == epochs - 1
-        if last:
-            history.valid_acc.append(evaluate_accuracy(model, valid_loader, device, exclude))
+        # Validation accuracy is costly, so by default it is measured only on the final epoch (that
+        # is the number the paper reports). With `cfg.progress` it is measured every epoch so the
+        # per-epoch line below can show it.
+        if last or cfg.progress:
+            val_acc = evaluate_accuracy(model, valid_loader, device, exclude)
         else:
-            history.valid_acc.append(float("nan"))
+            val_acc = float("nan")
+        history.valid_acc.append(val_acc)
 
         if target_inputs is not None:
             stats = check_targets(model, target_inputs, adv_labels, true_labels)
             history.target_adv_acc.append(stats["adv_acc"])
             history.target_adv_loss.append(stats["adv_loss"])
             history.target_orig_acc.append(stats["orig_acc"])
+
+        if cfg.progress:
+            adv = history.target_adv_acc[-1] if history.target_adv_acc else float("nan")
+            print(
+                f"  epoch {epoch + 1:>3}/{epochs}  loss {history.train_loss[-1]:.4f}  "
+                f"train_acc {history.train_acc[-1]:.4f}  val_acc {val_acc:.4f}  "
+                f"target_adv_acc {adv:.3f}",
+                flush=True,
+            )
 
         if diagnostics_fn is not None:
             # Fig. 2 measures the alignment with the gradient of each mini-batch *as the victim
