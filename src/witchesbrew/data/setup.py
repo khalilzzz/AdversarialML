@@ -202,8 +202,14 @@ def _explicit_case(case_id, cfg, trainset, validset) -> PoisonCase:
 
 
 def _random_case(case_id, cfg, trainset, validset) -> PoisonCase:
-    """Draw a class pair and a target from the case seed (reference `random_construction`)."""
-    seed = (abs(hash(cfg.name)) % (2**31)) + case_id
+    """Draw a class pair and a target from the case seed (reference `random_construction`).
+
+    The base seed is `cfg.case_seed` when set -- so the drawn (target, poison) pair is reproducible
+    and independent of the experiment name, letting several experiments share the same cases -- and
+    otherwise falls back to the experiment name, the legacy behaviour.
+    """
+    base = cfg.case_seed if cfg.case_seed is not None else (abs(hash(cfg.name)) % (2**31))
+    seed = base + case_id
     rng = np.random.default_rng(seed % (2**32 - 1))
     valid_labels = np.asarray(validset.targets)
     train_labels = np.asarray(trainset.targets)

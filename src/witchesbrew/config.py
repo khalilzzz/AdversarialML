@@ -45,6 +45,11 @@ class Config:
     target_index: int | None = None  # index into the validation set of the image to misclassify
     adv_class: int | None = None  # y_adv: the label the target should be pushed to
     poison_class: int | None = None  # class the poisons are drawn from; None -> adv_class
+    # Base seed for the random case construction on a custom dataset. When set, the (target, poison)
+    # pair a case draws is independent of the experiment name and reproducible across runs, so several
+    # experiments (e.g. plain vs low-frequency, defended vs not) can be compared on the same targets.
+    # None keeps the legacy behaviour of deriving the seed from the experiment name.
+    case_seed: int | None = None
 
     # --- threat model (paper section 3.1) -------------------------------
     budget: float = 0.01  # fraction of the training set that is poisoned

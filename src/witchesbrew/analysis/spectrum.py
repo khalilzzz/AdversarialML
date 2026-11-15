@@ -141,11 +141,32 @@ def delta_report(delta_norm: torch.Tensor, clean_norm: torch.Tensor, dataset: st
 
 
 def _poison_gradient(
-    model: torch.nn.Module, inputs: torch.Tensor, labels: torch.Tensor
+    model: torch.nn.Module,
+    inputs: torch.Tensor,
+    labels: torch.Tensor,
+    batch_size: int | None = None,
 ) -> torch.Tensor:
-    """Flat gradient of the training loss on the poisons w.r.t. the model parameters."""
-    loss = torch.nn.functional.cross_entropy(model(inputs), labels)
-    return _flat_grad(model, loss)
+    """Flat gradient of the mean training loss on the poisons w.r.t. the model parameters.
+
+    With `batch_size` set, the poisons are split into chunks and the gradient is accumulated across
+    them, so only one chunk's autograd graph is alive at a time. The gradient of the mean cross-
+    entropy over N samples equals the sum of the per-sample gradients divided by N, so each chunk is
+    summed (reduction='sum') and the total is divided by N at the end -- numerically identical to the
+    single-shot gradient, but bounded in memory. Needed at 224px, where the full poison batch does
+    not fit the autograd graph in GPU memory.
+    """
+    total = inputs.shape[0]
+    if batch_size is None or batch_size >= total:
+        loss = torch.nn.functional.cross_entropy(model(inputs), labels)
+        return _flat_grad(model, loss)
+    acc: torch.Tensor | None = None
+    for start in range(0, total, batch_size):
+        xb = inputs[start : start + batch_size]
+        yb = labels[start : start + batch_size]
+        loss = torch.nn.functional.cross_entropy(model(xb), yb, reduction="sum")
+        flat = _flat_grad(model, loss).detach()
+        acc = flat if acc is None else acc + flat
+    return acc / total
 
 
 def _to_normalized(pixel: torch.Tensor, dataset: str) -> torch.Tensor:
@@ -163,18 +184,22 @@ def alignment_survival(
     psi: Callable[[torch.Tensor], torch.Tensor],
     dataset: str,
     criterion_name: str = "cross-entropy",
+    grad_batch_size: int | None = None,
 ) -> dict:
     """The matching objective B = 1 - cos(g_target, g_poison) before and after Psi.
 
     g_poison is taken on the poisoned images as the victim would ingest them -- raw for `before`,
     purified for `after` -- so a large jump in B is the attack's signal being filtered out.
+
+    `grad_batch_size` chunks the poison-gradient accumulation so the autograd graph fits in memory;
+    it does not change the result, only the peak memory. None keeps the single-shot path.
     """
     model.eval()
     tgt_grads, tgt_norm = target_gradient(model, target_inputs, adv_labels, criterion_name)
     g_target = torch.cat([g.reshape(-1) for g in tgt_grads])
 
     def cos_to_target(inputs_norm: torch.Tensor) -> float:
-        g = _poison_gradient(model, inputs_norm, labels)
+        g = _poison_gradient(model, inputs_norm, labels, grad_batch_size)
         return float(torch.dot(g, g_target) / (g.norm() * g_target.norm() + 1e-12))
 
     poisoned_norm = clean_norm + delta_norm

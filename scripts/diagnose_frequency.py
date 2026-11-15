@@ -82,6 +82,7 @@ def main() -> None:
             **alignment_survival(
                 model, clean, delta, labels, target_inputs, adv_labels, psi,
                 cfg.dataset, cfg.target_criterion,
+                grad_batch_size=cfg.poison_batch_size,
             ),
         }
 
