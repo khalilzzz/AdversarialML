@@ -1,0 +1,166 @@
+\section*{[Prénom Nom]}
+
+\subsection*{Purification et Witches' Brew : où passe le budget de l'attaque}
+
+\paragraph{Idée.}
+PureGen (Bhat et al., 2024) montre qu'on peut presque annuler Witches'
+Brew (WB) en \emph{purifiant} les images d'entraînement avant d'apprendre,
+c'est-à-dire en les faisant passer dans un filtre qui les ramène vers des
+images naturelles (compression JPEG, débruitage par un modèle génératif).
+Le succès de l'attaque tombe alors à presque 0\,\%. Pourtant, la seule
+garantie théorique pour ce genre de défense (Hong et al., 2024) ne couvre
+qu'une perturbation totale de norme $\ell_2$ d'environ $0{,}6$, alors que
+WB peut dépenser jusqu'à $\sqrt{500}\times3{,}48\approx78$ sur CIFAR-10.
+La théorie n'explique donc pas pourquoi la défense marche.
+
+Mon hypothèse part de la façon dont une image se décompose en
+fréquences. Les \emph{basses fréquences} portent les formes et les grandes
+zones de couleur ; les \emph{hautes fréquences} portent les détails fins,
+la texture et le bruit, pixel à pixel. Je pense que WB met une bonne
+partie de sa perturbation dans les hautes fréquences, et que c'est
+justement ce que la purification efface. Si c'est le cas, une version de
+WB qui ne modifie que les basses fréquences devrait résister à la
+purification.
+
+\paragraph{Argument.}
+Pour pouvoir faire le calcul, j'ai remplacé le purificateur par un filtre
+simple, un \emph{filtre passe-bas}. J'utilise la transformée en cosinus
+discrète (DCT, la même que dans JPEG), qui réécrit une image comme une
+somme de motifs du plus lisse au plus fin. Je garde les $c\times c$ motifs
+les plus lisses et je mets les autres à zéro (l'image fait
+$224\times224$, donc $c=84$ revient à garder 14\,\% des motifs). Ce filtre
+est une projection $P$ : la victime voit $Px+P\delta$ au lieu de
+$x+\delta$, et la part de la perturbation qui arrive au modèle vaut
+exactement $\|P\delta\|^2/\|\delta\|^2$ (théorème de Pythagore). Tout le
+reste est effacé.
+
+Pour un classifieur linéaire, le gradient de la perte est le produit d'un
+vecteur d'erreur et de l'image : $\nabla_W\ell=(p-e_y)\,x^\top$, où $p$
+est le vecteur des probabilités prédites et $e_y$ celui de la bonne
+classe. Le cosinus que WB cherche à maximiser, entre le gradient de la
+cible et celui d'un poison purifié $\tilde x=P(x+\delta)$, se coupe alors
+en deux :
+\[
+\cos\big(\nabla_W\ell(x_t,y_{\mathrm{adv}}),\nabla_W\ell(\tilde x,y)\big)
+=\underbrace{\cos(p_t-e_{y_{\mathrm{adv}}},\,\tilde p-e_y)}_{\text{les erreurs se ressemblent}}
+\times\underbrace{\cos(x_t,\tilde x)}_{\text{les images se ressemblent}} .
+\]
+La perturbation n'agit sur ce cosinus qu'à travers $P\delta$ : tout ce
+que WB a mis dans les hautes fréquences ne sert plus à rien une fois
+l'image purifiée.
+
+\paragraph{Ma variante de l'attaque : WB basses fréquences.}
+Pour tester ça, j'ai modifié l'attaque. Après chaque pas d'optimisation,
+je passe la perturbation $\delta$ dans le même filtre passe-bas, puis je
+la ramène sous la limite de $16/255$ par pixel. Je répète ces deux étapes
+quelques fois, car chacune peut défaire un peu l'autre. À la fin,
+$\delta$ ne contient que des basses fréquences, donc le filtre ne lui
+retire rien. J'appelle cette variante ``WB basses fréquences''.
+Ma prédiction : sans défense, elle devrait être un peu moins efficace que
+WB normal, parce qu'elle a moins de liberté ; avec la défense, elle
+devrait être plus efficace.
+
+\paragraph{Test 1 : ce qui survit à la purification (ImageNet).}
+J'ai lancé WB normal et WB basses fréquences sur 3 cibles ImageNet
+($224\times224$, ResNet-18 pré-entraîné, environ 1\,200 poisons). Pour
+vérifier l'argument, j'ai mesuré la part de la perturbation qui survit au
+filtre passe-bas, et le cosinus entre le gradient de la cible et celui des
+poisons (la quantité que WB maximise), avant et après purification.
+J'ai aussi testé une compression JPEG simplifiée (qualité 75 : l'image
+est découpée en blocs de $8\times8$ pixels, chaque bloc passe en DCT, ses
+coefficients sont arrondis selon la table de quantification standard de
+JPEG, puis on revient en pixels). Les valeurs sont des moyennes sur les
+3 cibles.
+
+\begin{center}
+\small
+\begin{tabular}{@{}lcc@{}}
+\toprule
+& WB normal & WB basses fréq. \\
+\midrule
+Cosinus avant purification & 0{,}73 & 0{,}71 \\
+Part de la perturbation restante après passe-bas & 0{,}34 & 1{,}00 \\
+Cosinus après passe-bas & 0{,}38 & 0{,}61 \\
+Alignement conservé après passe-bas & 53\,\% & 87\,\% \\
+Alignement conservé après JPEG & 100\,\% & 99\,\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+C'est cohérent avec la théorie. Après le passe-bas, WB normal ne garde
+que 34\,\% de sa perturbation et la moitié de son alignement. WB basses
+fréquences garde toute sa perturbation et 87\,\% de son alignement, alors
+qu'il partait presque du même alignement : se limiter aux basses
+fréquences coûte donc peu à l'attaque. JPEG ne change rien à cette
+résolution, parce qu'il travaille sur des blocs de $8\times8$ pixels, ce
+qui ne touche que des détails très fins dans une image de
+$224\times224$.
+
+\paragraph{Test 2 : taux de succès réel (Imagenette, budget 1\,\%).}
+L'alignement ne dit pas si la cible bascule vraiment. J'ai donc croisé
+deux choix : WB normal ou WB basses fréquences, sans défense ou avec le
+filtre passe-bas ($c=84$). Ça donne 4 conditions. J'ai utilisé Imagenette
+(un sous-ensemble d'ImageNet à 10 classes, environ 9\,500 images
+d'entraînement), un ResNet-18 entraîné de zéro (40 époques, environ
+82\,\% de précision) et les mêmes 10 cibles dans les 4 conditions. Je
+regarde le succès et $L$, la perte finale de la cible vers la classe
+visée par l'attaquant : plus $L$ est bas, plus la cible est proche de
+basculer.
+
+\begin{center}
+\small
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+& WB normal & WB normal & WB basses fréq. & WB basses fréq. \\
+& sans défense & + passe-bas & sans défense & + passe-bas \\
+\midrule
+Succès & 2/10 & 2/10 & 3/10 & 2/10 \\
+$L$ moyen & 3{,}46 & 3{,}71 & 4{,}59 & 4{,}23 \\
+Précision & 82\,\% & 80\,\% & 82\,\% & 81\,\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Les tendances vont dans le sens prévu : le passe-bas augmente $L$ pour WB
+normal mais pas pour ma variante, et ma variante coûte un peu sans
+défense. Mais rien n'est significatif : j'ai comparé les conditions
+cible par cible avec un test de Wilcoxon, et toutes les différences ont
+une probabilité d'au moins 20\,\% d'être dues au hasard. À 1\,\%,
+l'attaque est trop faible : 7 cibles sur 10 échouent partout. Un bug de
+graine m'a fait relancer les mêmes cibles une deuxième fois, ce qui m'a
+servi de réplication : le résultat dépend surtout de la cible, et $L$
+varie de 1 à 3 points entre deux runs identiques. J'ai aussi entraîné une
+victime sans aucun poison : une des cibles est déjà classée dans la
+classe visée sans attaque, donc un des succès ne venait pas de l'attaque.
+
+\paragraph{Test 3 : budget 5\,\% et force de la défense.}
+J'ai monté le budget à 5\,\% (474 poisons) et fait varier $c$, le nombre
+de motifs gardés par le filtre, pour WB normal. Plus $c$ est petit, plus
+le filtre efface. Les résultats sont partiels (1 à 4 cibles par ligne) :
+
+\begin{center}
+\small
+\begin{tabular}{@{}lccc@{}}
+\toprule
+& Succès & Part de la perturbation effacée & Précision \\
+\midrule
+Sans défense & 1/2 & -- & 82\,\% \\
+Passe-bas $c=84$ (garde 14\,\% des motifs) & 4/4 & 28 à 42\,\% & 82\,\% \\
+Passe-bas $c=56$ (garde 6\,\% des motifs) & 1/2 & environ 50\,\% & 76 à 79\,\% \\
+Passe-bas $c=28$ (garde 1{,}6\,\% des motifs) & 1/4 & environ 72\,\% & 60 à 66\,\% \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+À 5\,\%, l'attaque devient beaucoup plus forte : une cible qui échouait
+partout à 1\,\% bascule même avec le filtre $c=84$. Plus le filtre efface
+la perturbation, plus WB échoue, ce qui correspond au mécanisme prévu.
+Mais ce filtre est une défense trop grossière : il ne fait pas la
+différence entre la perturbation et les détails utiles de l'image. À
+$c=84$ il ne protège pas, et à $c=28$ il protège au prix de 20 points de
+précision.
+
+\paragraph{Où j'en suis.}
+Les mesures du test 1 confirment la théorie. Sur le taux de succès réel,
+je n'ai pas encore de résultat concluant. J'ai lancé les 4 conditions à
+5\,\% avec $c=56$, sur 10 cibles par condition.

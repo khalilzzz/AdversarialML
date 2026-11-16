@@ -1,0 +1,913 @@
+% ------------------------------------------------------------------------------
+% Théorie des Pistes 1 et 2 autour de Witches' Brew
+% Compiler : pdflatex theorie_pistes.tex  (deux passes pour les références)
+% ------------------------------------------------------------------------------
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+
+% --- environnements -----------------------------------------------------------
+\theoremstyle{plain}
+\newtheorem{theorem}{Théorème}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemme}
+\newtheorem{corollary}[theorem]{Corollaire}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Définition}
+\newtheorem{assumption}[theorem]{Hypothèse}
+\newtheorem{example}[theorem]{Exemple}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remarque}
+\newtheorem{intuition}[theorem]{Intuition}
+
+% --- notations ----------------------------------------------------------------
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\Prob}{\mathbb{P}}
+\newcommand{\Loss}{\mathcal{L}}
+\newcommand{\Ladv}{\mathcal{L}_{\mathrm{adv}}}
+\newcommand{\B}{\mathcal{B}}
+\newcommand{\norm}[1]{\left\lVert #1 \right\rVert}
+\newcommand{\inner}[2]{\left\langle #1,\, #2 \right\rangle}
+\newcommand{\yadv}{y_{\mathrm{adv}}}
+\newcommand{\xt}{x_t}
+\newcommand{\grad}{\nabla}
+\newcommand{\Bin}{\mathrm{Bin}}
+\DeclareMathOperator{\cosang}{cos}
+\DeclareMathOperator{\argmin}{arg\,min}
+\DeclareMathOperator{\argmax}{arg\,max}
+\DeclareMathOperator{\Cov}{Cov}
+\DeclareMathOperator{\vect}{vec}
+\DeclareMathOperator{\DPA}{DPA}
+\DeclareMathOperator{\rang}{rang}
+
+\title{\textbf{Witches' Brew face à la purification et à l'agrégation}\\[4pt]
+\large Fondements théoriques des Pistes 1 et 2 : énoncés, preuves et prédictions testables}
+\author{Khalil --- notes de recherche}
+\date{Novembre 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Ce document établit, avec preuves complètes, les résultats théoriques qui soutiennent deux
+pistes de recherche autour de l'attaque \emph{Witches' Brew} (WB) de Geiping et al.~\cite{geiping2021}.
+La \textbf{Piste~1} explique pourquoi les défenses par purification (JPEG, débruitage par diffusion,
+EBM) battent WB bien au-delà de ce que leur certificat garantit : l'attaque dépense son budget
+$\ell_\infty$ dans un sous-espace que la purification efface. On démontre, dans le cas linéaire puis
+au premier ordre pour un réseau quelconque, que (i) la composante de la perturbation hors du
+sous-espace conservé est entièrement perdue, (ii) l'alignement de gradient atteignable après
+purification est borné par la fraction d'énergie de la cible dans ce sous-espace, et (iii)
+l'attaquant optimal contraint sa perturbation à l'intersection du sous-espace et de la boule
+$\ell_\infty$ --- ce qui définit l'attaque WB-LF. La \textbf{Piste~2} analyse la défense par
+agrégation DPA : on redémontre son certificat, on isole les deux hypothèses implicites de sa
+robustesse empirique (répartition uniforme des poisons et \emph{poisoning overfitting}), on prouve
+qu'un attaquant qui contrôle le hash public peut concentrer ses poisons, et on établit un théorème
+d'allocation qui quantifie le gain : le budget nécessaire passe de $\rho_0 n$ à $m_0\,\rho_0\,n/k$,
+soit un facteur $k/m_0$. Les énoncés nouveaux sont signalés comme tels ; les énoncés repris de la
+littérature sont cités avec leur source.
+\end{abstract}
+
+\tableofcontents
+
+% ==============================================================================
+\section{Cadre et notations}
+% ==============================================================================
+
+\subsection{Le problème bi-niveau}
+
+On considère un classifieur $F(\cdot,\theta)$, $\theta\in\R^p$, une perte $\Loss$ (entropie
+croisée), et $N$ exemples d'entraînement $(x_i,y_i)_{i=1}^N$, $x_i\in\R^d$. L'attaquant perturbe
+les $P$ premiers exemples ($P\ll N$, typiquement $1\%$) par $\Delta_i$ avec
+$\norm{\Delta_i}_\infty\le\varepsilon$ et laisse les étiquettes intactes (\emph{clean-label}).
+Il veut qu'une image cible $\xt$ (hors du train set) soit classée $\yadv$ par le modèle que la
+victime entraînera \emph{from scratch}. Formellement~\cite[éq.~1]{geiping2021} :
+\begin{equation}\label{eq:bilevel}
+\min_{\Delta\in\mathcal{C}}\ \Loss\big(F(\xt,\theta(\Delta)),\yadv\big)
+\quad\text{s.c.}\quad
+\theta(\Delta)\in\argmin_\theta \frac1N\sum_{i=1}^N \Loss\big(F(x_i+\Delta_i,\theta),y_i\big),
+\end{equation}
+avec $\mathcal{C}=\{\Delta : \norm{\Delta}_\infty\le\varepsilon,\ \Delta_i=0\ \forall i>P\}$.
+On note $\Ladv(\theta)=\Loss(F(\xt,\theta),\yadv)$ la perte adverse et $\Loss(\theta)$ la perte
+d'entraînement.
+
+\subsection{Gradient matching}
+
+Résoudre~\eqref{eq:bilevel} exigerait de rétropropager à travers tout l'entraînement. WB remplace
+le problème par un \emph{alignement de gradients} à un modèle propre $\theta^*$ fixé
+\cite[éq.~3]{geiping2021} :
+\begin{equation}\label{eq:B}
+\B(\Delta,\theta)\;=\;1-\frac{\inner{\grad_\theta\Ladv(\theta)}{\sum_{i=1}^P\grad_\theta\Loss(F(x_i+\Delta_i,\theta),y_i)}}
+{\norm{\grad_\theta\Ladv(\theta)}\;\norm{\sum_{i=1}^P\grad_\theta\Loss(F(x_i+\Delta_i,\theta),y_i)}}.
+\end{equation}
+$1-\B$ est le cosinus entre le gradient cible et le gradient agrégé des poisons. L'attaque minimise
+$\B(\Delta,\theta^*)$ par Adam signé avec projection sur $\mathcal{C}$ après chaque pas
+(Algorithme~1 de~\cite{geiping2021}).
+
+\begin{intuition}
+La victime fait des pas de descente sur $\Loss$. Si, à chaque $\theta$ rencontré, le gradient de
+$\Loss$ pointe à peu près dans la même direction que celui de $\Ladv$, alors chaque pas de la
+victime fait aussi baisser $\Ladv$ : elle apprend à mal classer la cible sans le savoir. Le
+résultat suivant rend cela exact.
+\end{intuition}
+
+% ==============================================================================
+\section{Le mécanisme de WB : descente adverse}
+% ==============================================================================
+
+Les résultats de cette section sont ceux de~\cite[Prop.~1 et App.~C]{geiping2021}, redémontrés ici
+avec les étapes intermédiaires explicitées. On en a besoin plus loin : la Piste~1 montre
+exactement quelle hypothèse de ce théorème la purification détruit.
+
+\begin{lemma}[Lemme de descente]\label{lem:descent}
+Soit $g:\R^p\to\R$ différentiable, de gradient $L$-lipschitzien. Alors pour tous $\theta,u$,
+\[
+g(\theta+u)\;\le\;g(\theta)+\inner{\grad g(\theta)}{u}+\frac{L}{2}\norm{u}^2 .
+\]
+\end{lemma}
+\begin{proof}
+Par le théorème fondamental, $g(\theta+u)-g(\theta)=\int_0^1\inner{\grad g(\theta+su)}{u}\,ds$.
+On ajoute et retranche $\inner{\grad g(\theta)}{u}$ :
+\[
+g(\theta+u)-g(\theta)-\inner{\grad g(\theta)}{u}
+=\int_0^1\inner{\grad g(\theta+su)-\grad g(\theta)}{u}\,ds
+\le\int_0^1 L\,s\norm{u}^2\,ds=\frac L2\norm{u}^2,
+\]
+par Cauchy--Schwarz et la lipschitzianité.
+\end{proof}
+
+\begin{theorem}[Descente adverse, {\cite[Prop.~1]{geiping2021}}]\label{thm:adv-descent}
+Soit $\Ladv$ minorée, de gradient $L$-lipschitzien, et soit la victime entraînée par descente de
+gradient $\theta^{k+1}=\theta^k-\alpha_k\grad\Loss(\theta^k)$. Si pour un $\beta<1$ fixé
+\begin{equation}\label{eq:cond}
+\alpha_k L\;<\;\beta\,\big(1-\B(\Delta,\theta^k)\big)\,\frac{\norm{\grad\Loss(\theta^k)}}{\norm{\grad\Ladv(\theta^k)}},
+\end{equation}
+alors $\Ladv(\theta^{k+1})<\Ladv(\theta^k)$. Si de plus il existe $\epsilon>0$ et $k_0$ tels que
+$\B(\Delta,\theta^k)<1-\epsilon$ pour tout $k\ge k_0$, alors $\norm{\grad\Ladv(\theta^k)}\to0$.
+\end{theorem}
+
+\begin{proof}
+Posons $u=-\alpha_k\grad\Loss(\theta^k)$ et $c_k=1-\B(\Delta,\theta^k)=\cosang\gamma^k$, le cosinus
+de l'angle $\gamma^k$ entre $\grad\Ladv(\theta^k)$ et $\grad\Loss(\theta^k)$. Le
+Lemme~\ref{lem:descent} appliqué à $\Ladv$ (avec la constante $L$ et en majorant $L/2$ par $L$)
+donne
+\[
+\Ladv(\theta^{k+1})\le\Ladv(\theta^k)-\alpha_k\inner{\grad\Ladv(\theta^k)}{\grad\Loss(\theta^k)}
++\alpha_k^2L\norm{\grad\Loss(\theta^k)}^2 .
+\]
+L'identité du cosinus $\inner{a}{b}=\norm a\norm b\cosang\gamma$ transforme le terme central :
+\[
+\Ladv(\theta^{k+1})\le\Ladv(\theta^k)
+-\norm{\grad\Loss(\theta^k)}^2\Big(\alpha_k\frac{\norm{\grad\Ladv(\theta^k)}}{\norm{\grad\Loss(\theta^k)}}c_k-\alpha_k^2L\Big).
+\]
+La parenthèse est strictement positive dès que
+$\alpha_k L<c_k\norm{\grad\Ladv(\theta^k)}/\norm{\grad\Loss(\theta^k)}$, et~\eqref{eq:cond} donne
+cette inégalité avec la marge $\beta<1$. D'où la décroissance stricte. En réinjectant
+\eqref{eq:cond} dans la parenthèse, on obtient une constante $c'>0$ (dépendant de $\beta$ et $L$)
+telle que
+\[
+\Ladv(\theta^{k+1})\le\Ladv(\theta^k)-\frac{c_k}{c'L}\norm{\grad\Ladv(\theta^k)}^2 .
+\]
+En sommant de $k_0$ à $K$ et en utilisant que $\Ladv$ est minorée par $\Ladv^{\min}$ :
+\[
+\sum_{k=k_0}^{K}c_k\norm{\grad\Ladv(\theta^k)}^2\le c'L\big(\Ladv(\theta^{k_0})-\Ladv^{\min}\big)<\infty .
+\]
+Si $c_k\ge\epsilon>0$ pour $k\ge k_0$, la série $\sum_k\norm{\grad\Ladv(\theta^k)}^2$ converge, donc
+son terme général tend vers $0$.
+\end{proof}
+
+\begin{remark}[L'hypothèse fragile]\label{rem:fragile}
+Tout repose sur $\B(\Delta,\theta^k)<1-\epsilon$ : le gradient des poisons \emph{tel que la victime
+le calcule} doit rester aligné avec le gradient cible. WB optimise $\B$ pour un seul $\theta^*$ et
+compte sur le transfert aux $\theta^k$ de la victime (Fig.~2 de~\cite{geiping2021} montre que ça
+tient empiriquement). La Piste~1 montre qu'une purification $\Psi$ remplace, dans $\B$, les poisons
+$x_i+\Delta_i$ par $\Psi(x_i+\Delta_i)$, et que cette substitution peut ramener $\B$ près de $1$
+quelle que soit la qualité de l'optimisation initiale.
+\end{remark}
+
+% ==============================================================================
+\section{Piste 1 : Witches' Brew face à la purification}
+% ==============================================================================
+
+\subsection{Les défenses par purification et le certificat vide}
+
+Hong, Carlini et Kurakin~\cite{hong2024} débruitent tout le train set avec un DDPM à un pas avant
+l'entraînement, puis invoquent le lissage aléatoire. Leur garantie repose sur :
+
+\begin{theorem}[{Cohen et al.~\cite{cohen2019}, Thm.~3.1 dans~\cite{hong2024}}]
+Soit $f$ un classifieur quelconque, $\eta\sim\mathcal N(0,\sigma^2I)$, et $g(x)=\argmax_c\Prob(f(x+\eta)=c)$.
+Si $\Prob(f(x+\eta)=y_A)\ge p_A>p_B\ge\max_{c\ne y_A}\Prob(f(x+\eta)=c)$, alors $g(x+\delta)=y_A$
+pour tout $\norm\delta_2<R=\frac\sigma2\big(\Phi^{-1}(p_A)-\Phi^{-1}(p_B)\big)$.
+\end{theorem}
+
+\begin{corollary}[{Weber et al.~\cite{weber2023}, Cor.~3.4 dans~\cite{hong2024}}]\label{cor:weber}
+Si le bruit de lissage est appliqué à chaque exemple d'entraînement et que les perturbations
+$(\delta_i)_{i=1}^n$ du train set vérifient
+\[
+\sqrt{\textstyle\sum_{i=1}^n\norm{\delta_i}_2^2}\;<\;\frac\sigma2\big(\Phi^{-1}(p_A)-\Phi^{-1}(p_B)\big),
+\]
+alors la prédiction du classifieur lissé sur la cible est inchangée.
+\end{corollary}
+
+\begin{proposition}[Le certificat est vide au budget de WB]\label{prop:vide}
+Sur CIFAR-10 ($d=3\cdot32\cdot32=3072$), avec $\varepsilon=16/255$ et $r=500$ poisons ($1\%$),
+le membre de gauche du Corollaire~\ref{cor:weber} peut atteindre $\approx78$, alors que le membre
+de droite est majoré par $\sigma\,\Phi^{-1}(p_A)\lesssim0{,}6$ pour $\sigma=0{,}25$ et toute
+estimation réaliste de $p_A$.
+\end{proposition}
+\begin{proof}
+Une perturbation $\ell_\infty$ saturée a $\norm{\delta_i}_2=\sqrt d\,\varepsilon=\sqrt{3072}\cdot16/255\approx3{,}48$
+(Hong et al. mesurent $3{,}5$--$6{,}5$ pour les attaques réelles, Table~2 de~\cite{hong2024}).
+Donc $\sqrt{\sum_i\norm{\delta_i}^2}=\sqrt{500}\cdot3{,}48\approx77{,}8$. À droite, comme
+$p_B\le1-p_A$ et $\Phi^{-1}(1-p_A)=-\Phi^{-1}(p_A)$, on a
+$\frac\sigma2(\Phi^{-1}(p_A)-\Phi^{-1}(p_B))\le\sigma\Phi^{-1}(p_A)$. Avec $m=1000$ modèles et
+un intervalle de Clopper--Pearson à $\alpha=10^{-3}$, $p_A\le0{,}993$ même si tous votent $y_A$,
+d'où $\Phi^{-1}(p_A)\le2{,}46$ et $\sigma\Phi^{-1}(p_A)\le0{,}62$.
+\end{proof}
+
+\begin{intuition}
+La défense marche donc $\sim100\times$ au-delà de ce qu'elle prouve (succès de WB
+$65\%\to3$--$10\%$ à $\sigma=0{,}25$, Table~2 de~\cite{hong2024}). Et PureGen~\cite{bhat2024puregen}
+rapporte que \emph{JPEG seul} ramène WB de $44\%$ à $0\%$ (Table~1). JPEG n'est pas un débruiteur
+appris : c'est une DCT par blocs suivie d'une quantification qui tue les hautes fréquences. Si WB
+meurt sous JPEG, c'est que son signal vit là où JPEG coupe. C'est l'hypothèse à démontrer.
+\end{intuition}
+
+\subsection{Modèle de la purification}
+
+\begin{definition}[Purification, sous-espace conservé]
+Une \emph{purification} est une application $\Psi:\R^d\to\R^d$ appliquée par la victime à chaque
+image d'entraînement avant l'apprentissage (les images de test, dont la cible, ne sont pas
+purifiées : c'est le réglage de~\cite[Cor.~3.5]{hong2024}). Le cas de référence est un
+\emph{projecteur orthogonal} $P$ sur un sous-espace $S\subset\R^d$ : $P^2=P$, $P^\top=P$,
+$\operatorname{Im}P=S$. On note $S^\perp$ l'orthogonal et $P^\perp=I-P$.
+\end{definition}
+
+\begin{example}[Passe-bas DCT]\label{ex:dct}
+Soit $C\in\R^{d\times d}$ la matrice de la DCT-II orthonormale 2D (par canal). Pour une
+coupure $n$, soit $M$ le masque diagonal qui garde les $n\times n$ coefficients de plus basse
+fréquence. Alors $P=C^\top MC$ est un projecteur orthogonal : $P^\top=P$ car $C$ orthogonale et
+$M$ diagonale, et $P^2=C^\top MCC^\top MC=C^\top M^2C=P$. C'est l'opérateur \texttt{dct} du code,
+et $S$ = images à spectre dans le bloc $n\times n$.
+\end{example}
+
+\begin{remark}[JPEG]
+JPEG = DCT par blocs $8\times8$, quantification entière par une table $Q$, déquantification, IDCT.
+Sans quantification ce serait l'identité ; avec, c'est une application constante par morceaux,
+donc \emph{non linéaire} et de jacobienne nulle presque partout. Elle agit \emph{comme} un
+projecteur sur les coefficients que la quantification annule (ceux dont $|c|<Q/2$), ce qui, à
+qualité $75$, concerne surtout les hautes fréquences intra-bloc. On la traite comme une
+approximation de l'Exemple~\ref{ex:dct} ; voir la Remarque~\ref{rem:jpeg224} pour l'effet de la
+résolution.
+\end{remark}
+
+\subsection{Le modèle linéaire : le gradient \emph{est} l'image}
+
+\begin{lemma}[Gradient de la régression logistique]\label{lem:loggrad}
+\emph{Binaire.} Pour $f(x)=w^\top x$, $y\in\{\pm1\}$ et $\ell(w;x,y)=\log(1+e^{-y\,w^\top x})$,
+\[
+\grad_w\ell(w;x,y)=r(x,y)\,x,\qquad r(x,y)=-y\,\sigma(-y\,w^\top x)\in(-1,1),
+\]
+où $\sigma$ est la sigmoïde. \emph{Multiclasse.} Pour $W\in\R^{C\times d}$, $p=\mathrm{softmax}(Wx)$
+et $\ell=-\log p_y$,
+\[
+\grad_W\ell(W;x,y)=(p-e_y)\,x^\top ,
+\]
+une matrice de rang un : ligne $=$ résidu dans l'espace des étiquettes, colonne $=$ l'image.
+\end{lemma}
+\begin{proof}
+Binaire : $\partial_w\log(1+e^{-yw^\top x})=\frac{e^{-yw^\top x}}{1+e^{-yw^\top x}}(-y\,x)=-y\,\sigma(-yw^\top x)\,x$.
+Multiclasse : $\partial\ell/\partial z=p-e_y$ pour $z=Wx$ (dérivée classique du log-softmax), et
+$\partial z/\partial W$ donne le produit extérieur par $x^\top$.
+\end{proof}
+
+\begin{proposition}[Le cosinus se factorise]\label{prop:factor}
+Dans le modèle multiclasse linéaire, pour deux exemples $(x,y)$ et $(x',y')$ de résidus
+$a=p-e_y$, $a'=p'-e_{y'}$,
+\[
+\cosang\big(\grad_W\ell(x,y),\grad_W\ell(x',y')\big)=\cosang(a,a')\cdot\cosang(x,x').
+\]
+\end{proposition}
+\begin{proof}
+Pour des matrices de rang un $G=ax^\top$, $G'=a'x'^\top$, le produit scalaire de Frobenius vaut
+$\inner{G}{G'}_F=\operatorname{tr}(x a^\top a' x'^\top)=\inner{a}{a'}\inner{x}{x'}$ et
+$\norm{G}_F=\norm a\norm x$. On divise.
+\end{proof}
+
+\begin{intuition}
+Dans le modèle linéaire, \emph{aligner les gradients, c'est aligner les images} (à un facteur
+d'étiquettes près que l'attaquant ne contrôle pas directement). Le gradient cible pointe selon
+$\xt$ ; le gradient d'un poison pointe selon $x_i+\delta_i$. Toute la géométrie de WB se lit donc
+dans l'espace des pixels, où agit la purification.
+\end{intuition}
+
+\subsection{Théorème central : alignement borné et budget gaspillé}
+
+\begin{theorem}[Borne d'alignement sous projection ; nouveau]\label{thm:rho}
+Soit $P$ un projecteur orthogonal sur $S$ et $\rho_S(\xt):=\norm{P\xt}/\norm{\xt}\in[0,1]$. Pour
+tout vecteur $u\in\R^d$ tel que $Pu\neq0$,
+\[
+\cosang(Pu,\xt)\;=\;\frac{\inner{Pu}{\xt}}{\norm{Pu}\norm{\xt}}\;\le\;\rho_S(\xt),
+\]
+avec égalité si et seulement si $Pu$ est positivement colinéaire à $P\xt$.
+\end{theorem}
+\begin{proof}
+Comme $P$ est symétrique et idempotent, $\inner{Pu}{\xt}=\inner{P^2u}{\xt}=\inner{Pu}{P\xt}$. Par
+Cauchy--Schwarz, $\inner{Pu}{P\xt}\le\norm{Pu}\norm{P\xt}$, avec égalité ssi $Pu$ et $P\xt$ sont
+positivement colinéaires. On divise par $\norm{Pu}\norm{\xt}$.
+\end{proof}
+
+Appliqué à WB linéaire avec purification : le gradient agrégé des poisons purifiés est
+$u_\Psi=\sum_i r_i\,P(x_i+\delta_i)=P\big(\sum_i r_i(x_i+\delta_i)\big)$, et le gradient cible
+est $r_t\xt$. Le Théorème~\ref{thm:rho} donne donc, pour \emph{tout} choix de $\delta$ :
+\begin{equation}\label{eq:rho-bound}
+1-\B_\Psi(\Delta,\theta)\;\le\;\rho_S(\xt)\cdot|\cosang(\text{facteur d'étiquettes})|\;\le\;\rho_S(\xt).
+\end{equation}
+
+\begin{corollary}[Les trois conséquences]\label{cor:trois}
+Soit $\delta=\delta_S+\delta_\perp$ avec $\delta_S=P\delta$, $\delta_\perp=P^\perp\delta$.
+\begin{enumerate}[label=(\roman*)]
+\item \textbf{Budget gaspillé.} $P(x+\delta)=Px+\delta_S$ : la composante $\delta_\perp$ n'a aucun
+effet sur ce que la victime voit. Le \emph{budget survivant} vaut exactement
+\[
+\frac{\norm{P(x+\delta)-Px}^2}{\norm\delta^2}=\frac{\norm{P\delta}^2}{\norm\delta^2}=1-\frac{\norm{\delta_\perp}^2}{\norm\delta^2},
+\]
+la fraction d'énergie de $\delta$ dans $S$.
+\item \textbf{Plafond d'alignement.} Même avec un budget infini, l'alignement après purification ne
+dépasse pas $\rho_S(\xt)$, la fraction de la \emph{cible} qui vit dans $S$.
+\item \textbf{Attaquant optimal.} À budget $\ell_\infty$ fixé, toute perturbation
+$\delta\notin S$ est dominée par $\delta_S$ \emph{du point de vue de la victime purifiée}, mais
+$\delta_S$ peut violer $\norm{\cdot}_\infty\le\varepsilon$. L'ensemble admissible pertinent est
+$K=S\cap\{\norm\delta_\infty\le\varepsilon\}$, et l'attaquant optimal résout
+\[
+\min_{\delta_i\in K}\ \B(\Delta,\theta^*).
+\]
+\end{enumerate}
+\end{corollary}
+\begin{proof}
+(i) est l'identité $P(x+\delta)-Px=P\delta$ et le théorème de Pythagore
+$\norm\delta^2=\norm{\delta_S}^2+\norm{\delta_\perp}^2$. (ii) est~\eqref{eq:rho-bound}.
+(iii) : par (i) le gradient purifié ne dépend que de $\delta_S$, donc tout minimiseur de $\B_\Psi$
+sur la boule peut être remplacé par sa projection sans changer la valeur ; il reste à respecter la
+contrainte $\ell_\infty$, d'où $K$.
+\end{proof}
+
+\begin{remark}[Quel mécanisme opère vraiment]\label{rem:lequel}
+Pour une image naturelle et une coupure large (bloc $84\times84$ sur $224$), $\rho_S(\xt)\approx1$
+(mesuré : $0{,}994$). Le plafond (ii) n'est donc pas ce qui tue WB ; c'est (i) : WB place
+l'essentiel de l'énergie de $\delta$ dans $S^\perp$, et la purification l'efface. Inversement,
+$\rho_S(\xt)\approx1$ est ce qui rend l'attaque contrainte \emph{possible} : la cible est presque
+entièrement dans $S$, donc il y a de quoi s'aligner dedans.
+\end{remark}
+
+\subsection{L'attaquant optimal : WB-LF et projections alternées}
+
+Le Corollaire~\ref{cor:trois}(iii) demande de projeter, après chaque pas d'Adam signé, sur
+$K=S\cap B_\infty(\varepsilon)$ (intersecté avec la plage de pixels valide, elle aussi une boîte).
+Il n'y a pas de formule fermée pour cette projection, mais :
+
+\begin{proposition}[Projections alternées / Dykstra]\label{prop:dykstra}
+$S$ (sous-espace fermé) et $B=\{\norm\delta_\infty\le\varepsilon\}\cap[\text{plage}]$ (boîte) sont
+deux convexes fermés d'intersection non vide ($0\in K$). L'algorithme de Dykstra
+\cite{boyle1986,bauschke1996} itérant $P_S$ et $P_B$ converge vers la projection euclidienne de
+$\delta$ sur $K$. Les projections alternées simples (sans correction de Dykstra) convergent vers
+un point de $K$ (pas nécessairement la projection), ce qui suffit pour garantir
+$\delta\in K$ à la limite.
+\end{proposition}
+\begin{proof}
+$P_S$ est linéaire (Exemple~\ref{ex:dct}) et $P_B$ est le clip coordonnée par coordonnée ; les deux
+sont des projections sur des convexes fermés. La convergence de Dykstra vers $\operatorname{proj}_K$
+pour deux convexes fermés d'intersection non vide est le théorème de Boyle--Dykstra
+\cite{boyle1986}. La convergence des projections alternées vers un point de l'intersection est
+le théorème de von Neumann généralisé (voir~\cite{bauschke1996}, Thm.~2.2).
+\end{proof}
+
+\begin{definition}[WB-LF]
+WB-LF est l'Algorithme~1 de~\cite{geiping2021} où l'initialisation $\Delta^r$ est projetée sur $S$
+et où la projection de la ligne~9 est remplacée par quelques balayages de la
+Proposition~\ref{prop:dykstra}. Tout le reste (Adam signé, augmentation différentiable, redémarrages)
+est inchangé.
+\end{definition}
+
+\begin{proposition}[Le coût prévu de la contrainte ; nouveau]\label{prop:cost}
+Notons $\B^*_{\mathrm{full}}=\min_{\delta_i\in B}\B$ et $\B^*_{\mathrm{LF}}=\min_{\delta_i\in K}\B$,
+évalués \emph{sans} purification. Alors $\B^*_{\mathrm{LF}}\ge\B^*_{\mathrm{full}}$ : WB-LF
+s'aligne moins bien que WB sur le modèle propre. En revanche, sous la purification $P$,
+$\B_\Psi(\Delta_{\mathrm{LF}})=\B(\Delta_{\mathrm{LF}})$ (la perturbation est invariante par $P$),
+alors que $\B_\Psi(\Delta_{\mathrm{full}})$ est évalué sur $P\Delta_{\mathrm{full}}$, perturbation
+tronquée que l'optimisation n'a jamais visée.
+\end{proposition}
+\begin{proof}
+$K\subset B$ donc le minimum sur $K$ est au moins le minimum sur $B$. Pour la seconde partie,
+$\delta\in S\Rightarrow P\delta=\delta$ et le Corollaire~\ref{cor:trois}(i) donne $P(x+\delta)=Px+\delta$ ;
+si de plus $x$ est lui-même peu affecté par $P$ (image naturelle), $\B_\Psi\approx\B$.
+\end{proof}
+
+\begin{intuition}
+C'est un pari : on accepte un alignement \emph{initial} un peu moins bon (sur l'ensemble
+admissible plus petit) pour obtenir un alignement \emph{après purification} qui ne s'effondre pas.
+La mesure décisive est donc le rapport $\cosang_{\text{après}}/\cosang_{\text{avant}}$ pour chaque
+attaque, pas $\B$ seul.
+\end{intuition}
+
+\subsection{Au-delà du linéaire : la jacobienne de \texorpdfstring{$\Psi$}{Psi}}
+
+\begin{proposition}[Version au premier ordre ; nouveau]\label{prop:jac}
+Soit $\Psi$ différentiable en $x$, de jacobienne $J=J_\Psi(x)$, et soit
+$g(v):=\grad_\theta\Loss(F(v,\theta),y)$ localement lipschitzienne en $v$. Alors
+\[
+g\big(\Psi(x+\delta)\big)=g\big(\Psi(x)+J\delta\big)+o(\norm\delta).
+\]
+En particulier, si $\delta=\delta_1+\delta_0$ avec $\delta_0\in\ker J$,
+$g(\Psi(x+\delta))=g(\Psi(x)+J\delta_1)+o(\norm\delta)$ : au premier ordre, la composante dans
+$\ker J$ est invisible pour le gradient que la victime calcule, donc pour $\B_\Psi$.
+\end{proposition}
+\begin{proof}
+$\Psi(x+\delta)=\Psi(x)+J\delta+o(\norm\delta)$ par différentiabilité, et la lipschitzianité locale
+de $g$ transporte le $o(\norm\delta)$. Si $\delta_0\in\ker J$, $J\delta=J\delta_1$.
+\end{proof}
+
+\begin{remark}
+Pour $\Psi=P$ linéaire, $J=P$, $\ker J=S^\perp$ et le $o(\norm\delta)$ est nul : on retrouve
+exactement le Corollaire~\ref{cor:trois}(i), sans hypothèse sur le réseau $F$. Pour JPEG,
+$J=0$ presque partout (quantification), ce qui est le phénomène des \emph{gradients obfusqués}
+\cite{athalye2018} : l'attaque à travers JPEG doit passer par BPDA (remplacer $J$ par $I$ dans la
+rétropropagation).
+\end{remark}
+
+\subsection{Débruitage gaussien : Tweedie et plan tangent}
+
+Le débruiteur de Hong et al. n'est pas un projecteur linéaire. On montre qu'il s'en rapproche
+localement.
+
+\begin{lemma}[Tweedie / Miyasawa~\cite{miyasawa1961,efron2011}]\label{lem:tweedie}
+Soit $x\sim p$, $y=x+\sigma\eta$, $\eta\sim\mathcal N(0,I)$, et $p_\sigma$ la densité de $y$. Le
+débruiteur optimal en moyenne quadratique $D^*(y)=\E[x\mid y]$ vérifie
+\[
+D^*(y)=y+\sigma^2\grad_y\log p_\sigma(y),\qquad
+J_{D^*}(y)=I+\sigma^2\grad^2_y\log p_\sigma(y)=\frac{1}{\sigma^2}\Cov[x\mid y].
+\]
+\end{lemma}
+\begin{proof}
+$p_\sigma(y)=\int p(x)\varphi_\sigma(y-x)\,dx$ avec $\varphi_\sigma$ la gaussienne. Alors
+$\grad_y p_\sigma(y)=\int p(x)\frac{x-y}{\sigma^2}\varphi_\sigma(y-x)\,dx=\frac{1}{\sigma^2}p_\sigma(y)\big(\E[x\mid y]-y\big)$,
+d'où la première identité en divisant par $p_\sigma$. En dérivant encore une fois,
+$\sigma^2\grad^2\log p_\sigma=\frac{1}{\sigma^2}\big(\E[xx^\top\mid y]-\E[x\mid y]\E[x\mid y]^\top\big)-I$,
+soit $J_{D^*}=\Cov[x\mid y]/\sigma^2$.
+\end{proof}
+
+\begin{assumption}[Variété localement plate]\label{ass:manifold}
+Au voisinage de $y$, la loi a posteriori de $x$ sachant $y$ est concentrée sur un sous-espace
+affine $T_y$ de dimension $K\ll d$ (le plan tangent local de la variété des images), avec une
+variance $\approx\sigma^2$ dans les directions de $T_y$ et $\approx0$ dans les directions
+normales.
+\end{assumption}
+
+\begin{proposition}[Le débruiteur optimal est un projecteur local ; sous l'Hypothèse~\ref{ass:manifold}]
+$J_{D^*}(y)\approx P_{T_y}$, le projecteur orthogonal sur $T_y$. Par la Proposition~\ref{prop:jac},
+toute composante de $\delta$ normale à la variété est gaspillée au premier ordre, et le plafond
+d'alignement devient $\rho_{T}(\xt)=\norm{P_{T}\xt}/\norm{\xt}$, la fraction de la cible
+expliquée par la variété.
+\end{proposition}
+\begin{proof}
+Sous l'hypothèse, $\Cov[x\mid y]\approx\sigma^2P_{T_y}$ ; on divise par $\sigma^2$ dans le
+Lemme~\ref{lem:tweedie}. Kadkhodaie et Simoncelli~\cite{kadkhodaie2021} vérifient
+empiriquement que la jacobienne des débruiteurs CNN entraînés est bien de rang effectif faible et
+symétrique, c'est-à-dire proche d'un projecteur.
+\end{proof}
+
+\begin{remark}[Pourquoi le flou gaussien synthétique n'est pas un contre-exemple]
+Le $\Psi$ \texttt{gaussian} du code est un flou à noyau fixe appliqué à $x+\sigma\eta$ ; sa
+jacobienne est le flou lui-même, un passe-bas dont la coupure effective est bien plus basse que
+$84/224$. Son $S_\Psi$ est donc \emph{plus petit} que le $S$ de WB-LF, et la théorie prédit
+précisément qu'il détruit les deux attaques (mesuré : alignement retenu $0{,}40$ et $0{,}38$).
+Ce n'est pas un échec de la thèse mais une illustration : WB-LF ne survit qu'aux $\Psi$ dont le
+sous-espace conservé contient $S$.
+\end{remark}
+
+\subsection{Conséquence sur la descente adverse}
+
+\begin{corollary}[La purification vide le Théorème~\ref{thm:adv-descent} ; nouveau]
+Sous purification $P$ et dans le modèle linéaire, l'hypothèse $\B_\Psi(\Delta,\theta^k)<1-\epsilon$
+du Théorème~\ref{thm:adv-descent} ne peut être satisfaite que si $\epsilon\le\rho_S(\xt)$, et,
+pour une perturbation d'énergie majoritairement dans $S^\perp$, $1-\B_\Psi$ est de l'ordre de
+$\sqrt{\text{budget survivant}}\cdot(1-\B)$ en première approximation. Le gradient de la victime
+cesse d'être une direction de descente \emph{garantie} pour $\Ladv$.
+\end{corollary}
+\begin{proof}
+La première partie est~\eqref{eq:rho-bound}. Pour la seconde, écrivons le gradient agrégé
+$u=u_S+u_\perp$ ; après purification il devient $u_S$, et
+$\cosang(u_S,\xt)=\inner{u_S}{\xt}/(\norm{u_S}\norm{\xt})$. Si l'alignement initial était porté
+proportionnellement par les deux composantes, $\inner{u_S}{\xt}\approx(\norm{u_S}^2/\norm u^2)\inner{u}{\xt}$
+et le cosinus après vaut $\approx(\norm{u_S}/\norm u)\cosang(u,\xt)$. Le rapport
+$\norm{u_S}/\norm u$ est la racine du budget survivant quand $u$ est dominé par $\delta$.
+\end{proof}
+
+\subsection{Pourquoi WB est haute fréquence}
+
+Rien dans~\eqref{eq:B} ne pousse $\delta$ vers les basses fréquences. Deux raisons structurelles
+l'en éloignent :
+\begin{enumerate}[label=(\alph*)]
+\item \textbf{L'optimiseur.} Adam signé ajoute à chaque pas $\pm\tau$ à \emph{chaque pixel}
+indépendamment. Un champ de signes indépendants a un spectre plat (bruit blanc) ; la projection
+$\ell_\infty$ le conserve. L'optimisation ne filtre ensuite que ce qui aide $\B$.
+\item \textbf{Le réseau.} Yin et al.~\cite{yin2019} montrent que les gradients par rapport à
+l'entrée des CNN entraînés naturellement sont dominés par les hautes fréquences, et que les
+perturbations adverses $\ell_\infty$ héritent de ce spectre. $\B$ est une fonction de ces
+gradients.
+\end{enumerate}
+Ce sont des arguments, pas des théorèmes ; la mesure du spectre de $\delta$ (profil DCT radial)
+tranche.
+
+\subsection{Prédictions testables et vérification}
+
+La théorie prédit, pour le projecteur exact $P=$ \texttt{dct} de coupure $n$ :
+\begin{enumerate}[label=P\arabic*.]
+\item WB plein : fraction d'énergie de $\delta$ hors du bloc $n\times n$ élevée ; budget survivant
+$=1-$ cette fraction $<1$ (Cor.~\ref{cor:trois}(i)) ; alignement retenu $\ll1$.
+\item WB-LF : énergie hors bloc $=0$ ; budget survivant $=1{,}000$ exactement
+($P\delta=\delta$) ; alignement retenu proche de $1$.
+\item WB-LF paie un $\B_{\text{avant}}$ un peu plus élevé (Prop.~\ref{prop:cost}).
+\item $\rho_S(\xt)\approx1$ pour une image naturelle et $n=84$ sur $224$ (Rem.~\ref{rem:lequel}).
+\end{enumerate}
+
+\paragraph{Mesures (ImageNet $224$px, ResNet-18 pré-entraîné, $\varepsilon=16$, budget $0{,}1\%$, $1282$ poisons, coupure $84$).}
+Cas~8 (cible \emph{king snake}, poison \emph{hyena}), valeurs du fichier \texttt{frequency\_probe.json} :
+
+\begin{center}
+\begin{tabular}{lcccccc}
+\toprule
+ & énergie HF & \multicolumn{3}{c}{sous \texttt{dct}} & \multicolumn{2}{c}{sous \texttt{jpeg}}\\
+\cmidrule(lr){3-5}\cmidrule(lr){6-7}
+ & de $\delta$ & survie budget & $\B_{\text{avant}}\to\B_{\text{après}}$ & align. retenu & survie & align. retenu\\
+\midrule
+WB plein & $0{,}366$ & $0{,}348$ & $0{,}226\to0{,}731$ & $0{,}348$ & $1{,}19$ & $1{,}003$\\
+WB-LF    & $2\cdot10^{-10}$ & $1{,}000$ & $0{,}268\to0{,}408$ & $0{,}809$ & $1{,}11$ & $0{,}998$\\
+\bottomrule
+\end{tabular}
+\end{center}
+$\rho_S(\xt)=0{,}994$. Sur trois cas indépendants (cas 4, 6, 8, trois machines), les moyennes sont
+$\approx0{,}38$ d'énergie HF, $0{,}34$ de survie et $0{,}53$ d'alignement retenu pour WB plein,
+contre $0$, $1{,}000$ et $0{,}87$ pour WB-LF.
+
+\paragraph{Lecture.} P2 est vérifiée \emph{exactement} (survie $1{,}000$, ce qui est une identité
+algébrique, donc aussi un test de l'implémentation). P1 : WB plein perd $65\%$ de son budget et
+son alignement s'effondre ($\B$ passe de $0{,}23$ à $0{,}73$). P3 : $0{,}268>0{,}226$, le coût
+prédit. P4 : $0{,}994$. Le contraste P1/P2 est le résultat de la Piste~1 au niveau spectral.
+
+\begin{remark}[JPEG à $224$px]\label{rem:jpeg224}
+La survie $\approx1$ sous JPEG n'est pas une contradiction avec PureGen (JPEG tue WB sur
+CIFAR-10 à $32$px). JPEG quantifie \emph{dans} des blocs $8\times8$ : il ne coupe que les
+fréquences de période inférieure à $\sim8$ pixels. Sur $32$px, un bloc est un quart de l'image et
+la coupure est sévère ; sur $224$px, la perturbation de WB a l'essentiel de son énergie à des
+périodes de $8$ à $60$ pixels (bloc $84$ sur $224$ $\leftrightarrow$ période $\gtrsim5$ px, et le
+profil radial mesuré est plat jusqu'au bin $\sim170$), que JPEG-75 laisse passer. Le purificateur
+discriminant à cette résolution est le passe-bas global ; c'est lui qu'il faut utiliser comme
+défense dans le $2\times2$ de la Partie~B.
+\end{remark}
+
+\subsection{Le coût : visibilité}
+
+À $\ell_\infty$ égal, une perturbation basse fréquence est plus visible~\cite{sharma2019} : elle
+forme des taches cohérentes plutôt qu'un grain. Le Corollaire~\ref{cor:trois}(iii) optimise sous
+contrainte $\ell_\infty$ seulement ; la bonne courbe à tracer est succès \emph{vs} visibilité
+(SSIM/LPIPS) \emph{vs} détectabilité (énergie hors variété), à la manière de~\cite{lukas2023}.
+C'est l'objet d'E3 et ce n'est pas couvert par un théorème.
+
+% ==============================================================================
+\section{Piste 2 : Witches' Brew face à l'agrégation (DPA)}
+% ==============================================================================
+
+\subsection{DPA et son certificat}
+
+\begin{definition}[Deep Partition Aggregation~\cite{levine2021}]
+Soit $k$ partitions, un apprenant déterministe $f$, et un hash déterministe $h:\mathcal X\times\mathcal Y\to\mathbb Z$.
+La partition $i$ est $P_i=\{(x,y)\in D:\ h(x,y)\equiv i\pmod k\}$. On entraîne $f_{P_i}$ sur chaque
+partition et on vote :
+\[
+\DPA_D(x_0)=\argmax_y V_y(x_0),\qquad V_y(x_0)=\#\{i:\ f_{P_i}(x_0)=y\},
+\]
+les égalités étant tranchées en faveur du plus petit indice de classe.
+\end{definition}
+
+\begin{theorem}[Certificat de DPA, {\cite[Thm.~1]{levine2021}}, repris en {\cite[Thm.~2.1]{wang2023}}]\label{thm:dpa}
+Soit $y_0=\DPA_D(x_0)$ et $g=V_{y_0}-\max_{y\ne y_0}\big(V_y+\mathbf 1[y<y_0]\big)$ la marge de votes.
+Pour tout $D'$ avec $|D\triangle D'|\le s$ et $s<g/2$, on a $\DPA_{D'}(x_0)=y_0$.
+\end{theorem}
+\begin{proof}
+Chaque échantillon appartient à exactement une partition (le hash ne dépend que de l'échantillon).
+Les $s$ insertions/suppressions touchent donc au plus $s$ partitions ; les $k-s$ autres ont un
+train set identique et, l'apprenant étant déterministe, un classifieur identique. Chaque partition
+modifiée peut au pire retirer un vote à $y_0$ et en donner un à un $y\ne y_0$. Donc
+$V'_{y_0}\ge V_{y_0}-s$ et $V'_y\le V_y+s$. $y_0$ garde la majorité (avec la règle d'égalité) si
+$V_{y_0}-s>V_y+s+\mathbf 1[y<y_0]-1$ pour tout $y$, soit $2s<g$ à l'unité près de la règle
+d'égalité, ce qui est l'hypothèse.
+\end{proof}
+
+\begin{intuition}
+Le certificat compte \emph{un poison $=$ au plus un vote}. Avec $k=50$ et un vote unanime, il
+garantit la prédiction jusqu'à $24$ poisons. WB en utilise $500$. Comme pour la Piste~1, la
+robustesse \emph{empirique} de DPA (Table~6 de~\cite{wang2023} : succès réduit jusqu'à
+$3843$ poisons) est d'un autre ordre que le certificat, et il faut en trouver le mécanisme.
+\end{intuition}
+
+\subsection{Poisoning overfitting et l'hypothèse cachée}
+
+\begin{definition}[Poisoning overfitting, {\cite[Déf.~5.1]{wang2023}}]
+Notons $p(\rho,N)$ la probabilité qu'un modèle entraîné sur $N$ images dont une fraction $\rho$
+est empoisonnée classe la cible comme $\yadv$. Il y a \emph{poisoning overfitting} si
+$p(\rho,N)$ décroît quand $N$ décroît à $\rho$ fixé.
+\end{definition}
+
+Wang et Feizi expliquent la robustesse empirique de DPA ainsi : si les poisons sont répartis
+uniformément, chaque partition contient la fraction globale $\rho=B/n$ mais seulement $n/k$
+images ; par overfitting, $p(\rho,n/k)<p(\rho,n)$. Ils écrivent explicitement
+(\S5.2) que si l'overfitting ne se produit pas, DPA n'apporte pas de robustesse empirique
+supplémentaire. Deux hypothèses sont donc implicites : \textbf{(H1)} répartition uniforme des
+poisons entre partitions ; \textbf{(H2)} l'attaque souffre d'overfitting. L'attaquant par gradient
+matching peut violer les deux.
+
+\subsection{Ce que DPA fait sans overfitting : l'effet Condorcet}
+
+Avant d'attaquer (H1), précisons (H2). Même sans overfitting, le vote majoritaire transforme la
+probabilité par modèle.
+
+\begin{proposition}[Effet Condorcet ; nouveau dans ce contexte]\label{prop:condorcet}
+Supposons (H1), pas d'overfitting ($p(\rho,n/k)=p(\rho,n)=:p$), des modèles de base
+indépendants, et une cible votée unanimement $y_0$ sur données propres. Alors
+\[
+\Prob[\text{DPA retourné}]=\Prob\big[\Bin(k,p)\ge\lfloor k/2\rfloor+1\big],
+\]
+et par l'inégalité de Hoeffding :
+\[
+p<\tfrac12\ \Rightarrow\ \Prob[\text{retourné}]\le e^{-2k(1/2-p)^2},\qquad
+p>\tfrac12\ \Rightarrow\ \Prob[\text{retourné}]\ge1-e^{-2k(p-1/2)^2}.
+\]
+\end{proposition}
+\begin{proof}
+Sous (H1) et sans overfitting, chaque modèle de base est retourné avec la même probabilité $p$ que
+le modèle unique, indépendamment (train sets disjoints, initialisations indépendantes). Le nombre
+de modèles retournés est donc $\Bin(k,p)$, et DPA bascule ssi ce nombre dépasse la moitié. Hoeffding
+pour une binomiale : $\Prob[\Bin(k,p)\ge k(p+t)]\le e^{-2kt^2}$ avec $t=1/2-p$ ; symétriquement
+pour la minoration.
+\end{proof}
+
+\begin{remark}
+Ceci nuance Wang et Feizi : même sans overfitting, DPA \emph{amplifie} la faiblesse par modèle
+(si $p<1/2$, le succès agrégé tend vers $0$ exponentiellement en $k$) --- mais amplifie aussi la
+force ($p>1/2$ donne un succès agrégé $\to1$). La bataille se joue donc autour de $p=1/2$ par
+partition attaquée. C'est exactement ce que la concentration des poisons permet de franchir.
+\end{remark}
+
+\subsection{Lemme de placement : l'attaquant contrôle le hash}
+
+\begin{lemma}[Placement sous hash public ; nouveau]\label{lem:hash}
+\begin{enumerate}[label=(\alph*)]
+\item \textbf{Somme des pixels} ($h(x)=\sum_j x_j$ sur des entiers $0..255$, implémentation de
+\cite{levine2021}). Pour tout $x$ et toute partition cible $i^*$, il existe $x'$ avec
+$\norm{x'-x}_\infty\le1$ (en unités $0..255$) et $h(x')\equiv i^*\pmod k$, dès que $x$ a au moins
+$k-1$ pixels non saturés.
+\item \textbf{Somme pondérée publique} ($h_W(x)=\sum_jW_jx_j\bmod p$, partition $=h_W\bmod k$,
+\cite[Déf.~4.1]{wang2023}). Si les résidus $W_j\bmod k$ sont répartis sur $\mathbb Z/k\mathbb Z$,
+une recherche par modifications $\pm1$ d'un seul pixel atteint la partition cible en $k$ essais
+en moyenne, avec $\norm{x'-x}_\infty\le1$.
+\item \textbf{Hash secret (keyed).} Si $W$ est secret et uniforme, la partition de $x'$ est, pour
+l'attaquant, uniforme sur $\{0,\dots,k-1\}$ et indépendante de $x'$ : aucun placement n'est
+possible, et (H1) est restaurée en espérance.
+\end{enumerate}
+\end{lemma}
+\begin{proof}
+(a) Il faut décaler $h$ de $t:=(i^*-h(x))\bmod k\in\{0,\dots,k-1\}$. On ajoute $1$ à $t$ pixels
+distincts non saturés : la somme augmente de $t$ et chaque pixel bouge d'une unité. (b) Changer
+le pixel $j$ de $\pm1$ change $h_W\bmod k$ de $\pm W_j\bmod k$ ; si ces résidus couvrent
+$\mathbb Z/k\mathbb Z$, chaque essai atteint $i^*$ avec probabilité $\approx1/k$, d'où $k$ essais
+en moyenne (loi géométrique). (c) Pour $W$ uniforme et inconnu, $h_W(x')\bmod k$ est uniforme
+quel que soit $x'\neq0$ par le même argument que le lemme de Schwartz--Zippel invoqué
+dans~\cite{wang2023}.
+\end{proof}
+
+\begin{remark}
+Le coût du placement est $1/255$ en $\ell_\infty$, à retrancher de $\varepsilon$ (brasser à
+$\varepsilon-1$ puis corriger le hash). Wang et Feizi introduisent le hash pondéré en notant qu'on
+\og{}suppose à tort\fg{} que l'attaquant choisit sa partition en manipulant la somme des pixels ;
+le point (b) montre que la pondération \emph{publique} n'empêche rien, seule la secrétisation (c)
+le fait. C'est la contre-mesure E3.
+\end{remark}
+
+\subsection{Théorème d'allocation}
+
+\begin{assumption}\label{ass:alloc}
+$n$ images, $k$ partitions de taille $n/k$, budget $B$ poisons. L'attaquant choisit $m$ partitions
+et y place $B_1,\dots,B_m$ poisons ($\sum B_j=B$), soit des fractions $\rho_j=B_jk/n$. Les modèles
+de base attaqués sont retournés indépendamment avec probabilités $p(\rho_j)$, où $p:[0,1]\to[0,1]$
+est croissante (succès par partition mesuré en E1). Les $k-m$ autres votent comme sur données
+propres. La marge initiale est $g$ (Théorème~\ref{thm:dpa}) et il faut retourner
+$m_0:=\lfloor g/2\rfloor+1$ modèles vers $\yadv$ pour faire basculer le vote.
+\end{assumption}
+
+\begin{theorem}[Allocation optimale ; nouveau]\label{thm:alloc}
+Sous l'Hypothèse~\ref{ass:alloc} :
+\begin{enumerate}[label=(\roman*)]
+\item \textbf{Nécessité.} Il faut $m\ge m_0$ : attaquer moins de $m_0$ partitions ne peut pas
+retourner le vote, quel que soit le budget.
+\item \textbf{Répartition à $m$ fixé.} Si $p$ est concave sur $[0,\rho_{\max}]$, la répartition
+égale $B_j=B/m$ maximise le nombre espéré de modèles retournés $\sum_jp(\rho_j)$. Si $p$ est
+convexe, c'est une répartition extrême (le plus petit $m$ admissible, $m=m_0$).
+\item \textbf{Succès et choix de $m$.} Avec répartition égale, $\rho_m=Bk/(mn)$ et
+\[
+S(m)=\Prob\big[\Bin(m,p(\rho_m))\ge m_0\big],\qquad m^*=\argmax_{m_0\le m\le\min(k,B)}S(m).
+\]
+\item \textbf{Comparaison à la répartition uniforme.} La répartition uniforme (H1) correspond à
+$m=k$, $\rho_k=B/n$, et $S_{\mathrm{unif}}=\Prob[\Bin(k,p(B/n))\ge m_0]$. Donc
+$S(m^*)\ge S_{\mathrm{unif}}$, avec un gain d'un facteur $k/m$ sur la fraction par partition.
+\end{enumerate}
+\end{theorem}
+\begin{proof}
+(i) Les partitions non attaquées votent comme sur données propres ; seules les $m$ attaquées
+peuvent changer de vote, et chacune n'apporte qu'un vote. (ii) Jensen : pour $p$ concave,
+$\frac1m\sum_jp(\rho_j)\le p\big(\frac1m\sum_j\rho_j\big)=p(\rho_m)$, avec égalité pour la
+répartition égale. Pour $p$ convexe, l'inégalité est renversée et le maximum d'une fonction convexe
+sur le simplexe est atteint en un sommet ; sous la contrainte $m\ge m_0$ de (i), concentrer sur
+exactement $m_0$ partitions. (iii) Sous répartition égale, les $m$ indicatrices de retournement sont
+i.i.d. Bernoulli$(p(\rho_m))$ ; le vote bascule ssi au moins $m_0$ d'entre elles valent $1$.
+$m\le B$ car on ne place pas de fraction de poison. (iv) $m=k$ est un point admissible de la
+maximisation en (iii).
+\end{proof}
+
+\begin{corollary}[Budget critique et facteur $k/m_0$ ; nouveau]\label{cor:budget}
+Si $p$ est une sigmoïde d'inflexion $\rho_0$ (convexe avant, concave après), l'attaquant veut
+chaque partition attaquée au-delà de $\rho_0$, ce qui demande
+\[
+B\;\ge\;B^*_{\mathrm{conc}}:=m_0\,\rho_0\,\frac nk ,
+\]
+contre $B^*_{\mathrm{unif}}=\rho_0\,n$ pour atteindre $\rho_0$ partout sous (H1). Le rapport est
+$B^*_{\mathrm{unif}}/B^*_{\mathrm{conc}}=k/m_0$. Pour une cible unanime, $m_0=\lfloor k/2\rfloor+1$
+et le gain est $\approx2$ ; pour une cible de marge $g$, le gain est $\approx2k/g$.
+\end{corollary}
+\begin{proof}
+Par le Théorème~\ref{thm:alloc}(i), $m\ge m_0$ ; par (ii) sur la partie convexe, on prend
+$m=m_0$ ; chaque partition attaquée doit alors contenir $\rho_0\,n/k$ poisons. Sous (H1), avoir
+$\rho_0$ dans chaque partition revient à $\rho_0$ globalement.
+\end{proof}
+
+\begin{intuition}
+Le certificat de DPA compte \og{}un poison retourne un modèle\fg{}. En réalité il en faut
+$\rho_0n/k$ (quelques dizaines sur une partition de $1000$). Le Corollaire~\ref{cor:budget} dit
+que l'attaquant informé paie exactement $m_0$ fois ce prix, soit $(s^*+1)\cdot\rho_0n/k$ avec
+$s^*$ le rayon certifié : \emph{le certificat est serré, à ce facteur $\rho_0n/k$ près, précisément
+contre l'attaquant qui contrôle le hash}. Et le gain par rapport à l'attaquant naïf est maximal
+quand la marge $g$ est petite --- la même zone où le certificat est faible.
+\end{intuition}
+
+\subsection{Exemple numérique}
+
+\begin{example}
+$k=50$, $n=50\,000$, $B=500$ ($1\%$), partitions de $1000$ images. Supposons la courbe
+$p(1\%)=0{,}1$ (overfitting sur $1000$ images) et $p(5\%)=0{,}9$.
+\begin{itemize}[nosep]
+\item \emph{Cible unanime} ($g=50$, $m_0=26$). Uniforme : $\Prob[\Bin(50,0{,}1)\ge26]\approx0$.
+Concentré sur $m=26$ : $\rho=500/26\,000\approx1{,}9\%$ ; il faudrait $p(1{,}9\%)$ proche de $1$
+pour que $p^{26}$ ne soit pas négligeable. DPA tient : c'est le régime $B<B^*_{\mathrm{conc}}$.
+\item \emph{Cible de marge} $g=10$ (votes $30$ contre $20$, $m_0=6$). Uniforme :
+$\Prob[\Bin(50,0{,}1)\ge6]\approx0{,}38$. Concentré sur $m=10$ : $\rho=5\%$,
+$\Prob[\Bin(10,0{,}9)\ge6]\approx0{,}998$. Le succès passe de $38\%$ à $\sim100\%$ à budget égal.
+\end{itemize}
+Le point d'inflexion $\rho_0$ et sa pente sont exactement ce que E1 mesure ; sans cette courbe
+le théorème reste conditionnel.
+\end{example}
+
+\subsection{Le second levier : fidélité du substitut}
+
+Le modèle de base $f_{P_i}$ est entraîné sur $\sim1000$ images connues de l'attaquant (il les
+place lui-même) avec l'architecture connue (gray-box). L'attaquant peut donc brasser sur un
+substitut $\theta^*_i$ entraîné sur \emph{exactement} la partition $P_i$ propre, bien plus fidèle
+que le modèle unique de WB classique. Dans le Théorème~\ref{thm:adv-descent}, cela rapproche
+$\theta^*$ de la trajectoire $\theta^k$ de la victime et augmente $p(\rho)$. Ce n'est pas un
+théorème mais une conséquence directe de la Remarque~\ref{rem:fragile}.
+
+\subsection{Lien entre les deux pistes}
+
+Koh, Steinhardt et Liang~\cite{koh2022} cassent les défenses par assainissement sur modèles
+linéaires avec deux principes : \textbf{concentrer} les poisons (ils montrent qu'on peut porter
+toute la masse sur deux points sans perte) et \textbf{optimiser sous contrainte d'évasion} du
+détecteur. La Piste~2 est le premier principe transposé à DPA (concentration dans les partitions,
+Théorème~\ref{thm:alloc}) ; la Piste~1 est le second transposé à la purification (contrainte
+$\delta\in S$, Corollaire~\ref{cor:trois}(iii)). Les deux disent la même chose : WB est évalué
+contre des défenses qui supposent un attaquant non adaptatif, et les deux certificats sont vides
+au budget réel (Prop.~\ref{prop:vide}, Théorème~\ref{thm:dpa}) --- la robustesse empirique repose
+sur des hypothèses (sous-espace, uniformité) que l'attaquant peut violer.
+
+% ==============================================================================
+\section{Récapitulatif : énoncés, hypothèses, et ce que chaque expérience teste}
+% ==============================================================================
+
+\begin{center}
+\small
+\begin{tabular}{p{3.6cm}p{4.2cm}p{3.6cm}p{3.4cm}}
+\toprule
+Énoncé & Hypothèses & Source & Testé par\\
+\midrule
+Thm.~\ref{thm:adv-descent} descente adverse & $\Ladv$ lisse, $\B<1-\epsilon$ le long de la trajectoire & \cite{geiping2021} & Fig.~2/5 de WB\\
+Prop.~\ref{prop:vide} certificat vide & $\varepsilon=16/255$, $r=500$, $\sigma=0{,}25$ & calcul sur \cite{hong2024} & ---\\
+Thm.~\ref{thm:rho} borne $\rho_S$ & $P$ projecteur orthogonal & nouveau & \texttt{rho\_target}\\
+Cor.~\ref{cor:trois}(i) budget gaspillé & idem & nouveau & \texttt{budget\_survival}\\
+Cor.~\ref{cor:trois}(iii) attaquant optimal & idem & nouveau & WB-LF (E1)\\
+Prop.~\ref{prop:dykstra} projection sur $K$ & convexes fermés & \cite{boyle1986,bauschke1996} & \texttt{subspace\_project}\\
+Prop.~\ref{prop:cost} coût de la contrainte & $K\subset B$ & nouveau & $\B_{\text{avant}}$ LF $>$ plein\\
+Prop.~\ref{prop:jac} jacobienne de $\Psi$ & $\Psi$ différentiable, $g$ lipschitz & nouveau & E2 (BPDA)\\
+Lem.~\ref{lem:tweedie} Tweedie & bruit gaussien & \cite{miyasawa1961,efron2011} & ---\\
+Prop. débruiteur $=$ projecteur & Hyp.~\ref{ass:manifold} & \cite{kadkhodaie2021} & vrai DDPM (hook)\\
+Thm.~\ref{thm:dpa} certificat DPA & apprenant et hash déterministes & \cite{levine2021} & ---\\
+Prop.~\ref{prop:condorcet} Condorcet & (H1), pas d'overfitting, indépendance & nouveau & E0 Piste~2\\
+Lem.~\ref{lem:hash} placement & hash public & nouveau & E2 Piste~2\\
+Thm.~\ref{thm:alloc} allocation & Hyp.~\ref{ass:alloc}, $p$ croissante & nouveau & E1+E2 Piste~2\\
+Cor.~\ref{cor:budget} facteur $k/m_0$ & $p$ sigmoïde & nouveau & E1 (mesure $\rho_0$)\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Ce que la théorie ne dit pas.} (1) Elle ne prédit pas le \emph{succès} final de la
+victime, seulement l'alignement ; le passage de l'un à l'autre est le Théorème~\ref{thm:adv-descent},
+dont l'hypothèse sur toute la trajectoire est empirique. (2) Pour un réseau non linéaire, les
+résultats de la Piste~1 sont au premier ordre en $\delta$ ; avec $\varepsilon=16/255$ le terme
+$o(\norm\delta)$ n'est pas nul. (3) La Piste~2 suppose les modèles de base indépendants et une
+courbe $p(\rho)$ qui ne dépend pas de la partition ; les deux sont à vérifier. (4) La visibilité
+des perturbations basse fréquence n'est pas modélisée.
+
+% ==============================================================================
+\begin{thebibliography}{99}
+\small
+
+\bibitem{geiping2021} J.~Geiping, L.~Fowl, W.~R.~Huang, W.~Czaja, G.~Taylor, M.~Moeller, T.~Goldstein.
+\emph{Witches' Brew: Industrial Scale Data Poisoning via Gradient Matching}. ICLR 2021. arXiv:2009.02276.
+
+\bibitem{hong2024} S.~Hong, N.~Carlini, A.~Kurakin.
+\emph{Certified Robustness to Clean-Label Poisoning Using Diffusion Denoising}. ICML 2024. arXiv:2403.11981.
+
+\bibitem{cohen2019} J.~Cohen, E.~Rosenfeld, J.~Z.~Kolter.
+\emph{Certified Adversarial Robustness via Randomized Smoothing}. ICML 2019.
+
+\bibitem{weber2023} M.~Weber, X.~Xu, B.~Karlaš, C.~Zhang, B.~Li.
+\emph{RAB: Provable Robustness Against Backdoor Attacks}. IEEE S\&P 2023.
+
+\bibitem{bhat2024puregen} S.~Bhat, J.~Jiang, O.~Pooladzandi, A.~Branch, G.~Pottie.
+\emph{PureGen: Universal Data Purification for Train-Time Poison Defense via Generative Model Dynamics}. 2024. arXiv:2405.18627.
+
+\bibitem{bhat2024pureebm} O.~Pooladzandi, J.~Jiang, S.~Bhat, G.~Pottie.
+\emph{PureEBM: Universal Poison Purification via Mid-Run Dynamics of Energy-Based Models}. 2024. arXiv:2405.19376.
+
+\bibitem{wang2023} W.~Wang, S.~Feizi.
+\emph{On Practical Aspects of Aggregation Defenses against Data Poisoning Attacks}. 2023. arXiv:2306.16415.
+
+\bibitem{levine2021} A.~Levine, S.~Feizi.
+\emph{Deep Partition Aggregation: Provable Defenses against General Poisoning Attacks}. ICLR 2021. arXiv:2006.14768.
+
+\bibitem{koh2022} P.~W.~Koh, J.~Steinhardt, P.~Liang.
+\emph{Stronger Data Poisoning Attacks Break Data Sanitization Defenses}. Machine Learning 111 (2022). arXiv:1811.00741.
+
+\bibitem{schwarzschild2021} A.~Schwarzschild, M.~Goldblum, A.~Gupta, J.~P.~Dickerson, T.~Goldstein.
+\emph{Just How Toxic is Data Poisoning? A Unified Benchmark}. ICML 2021. arXiv:2006.12557.
+
+\bibitem{he2024sapa} P.~He, H.~Xu, J.~Ren, Y.~Cui, S.~Zeng, H.~Liu, C.~Aggarwal, J.~Tang.
+\emph{Sharpness-Aware Data Poisoning Attack}. ICLR 2024. arXiv:2305.14851.
+
+\bibitem{lukas2023} N.~Lukas, F.~Kerschbaum.
+\emph{Pick your Poison: Undetectability versus Robustness in Data Poisoning Attacks}. 2023. arXiv:2305.09671.
+
+\bibitem{sharma2019} Y.~Sharma, G.~W.~Ding, M.~Brubaker.
+\emph{On the Effectiveness of Low Frequency Perturbations}. IJCAI 2019. arXiv:1903.00073.
+
+\bibitem{yin2019} D.~Yin, R.~Gontijo Lopes, J.~Shlens, E.~D.~Cubuk, J.~Gilmer.
+\emph{A Fourier Perspective on Model Robustness in Computer Vision}. NeurIPS 2019.
+
+\bibitem{athalye2018} A.~Athalye, N.~Carlini, D.~Wagner.
+\emph{Obfuscated Gradients Give a False Sense of Security}. ICML 2018.
+
+\bibitem{boyle1986} J.~P.~Boyle, R.~L.~Dykstra.
+\emph{A method for finding projections onto the intersection of convex sets in Hilbert spaces}. Lecture Notes in Statistics 37 (1986).
+
+\bibitem{bauschke1996} H.~H.~Bauschke, J.~M.~Borwein.
+\emph{On projection algorithms for solving convex feasibility problems}. SIAM Review 38(3) (1996).
+
+\bibitem{miyasawa1961} K.~Miyasawa.
+\emph{An empirical Bayes estimator of the mean of a normal population}. Bull. Inst. Internat. Statist. 38 (1961).
+
+\bibitem{efron2011} B.~Efron.
+\emph{Tweedie's formula and selection bias}. JASA 106(496) (2011).
+
+\bibitem{kadkhodaie2021} Z.~Kadkhodaie, E.~P.~Simoncelli.
+\emph{Stochastic Solutions for Linear Inverse Problems using the Prior Implicit in a Denoiser}. NeurIPS 2021.
+
+\bibitem{nocedal2006} J.~Nocedal, S.~J.~Wright.
+\emph{Numerical Optimization}, 2e éd., Springer 2006 (Thm.~3.2, Zoutendijk).
+
+\end{thebibliography}
+
+\end{document}

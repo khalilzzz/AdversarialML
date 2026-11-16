@@ -1,0 +1,10 @@
+{
+  "experiment": "nopoison",
+  "cases": 10,
+  "avg_poison_success": 10.0,
+  "stderr": 10.0,
+  "avg_valid_acc": 82.36493374108052,
+  "valid_acc_stderr": 0.3607612307683258,
+  "mean_brew_minutes": 0.013546169598897298,
+  "paper_setting": false
+}

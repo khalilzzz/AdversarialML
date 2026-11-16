@@ -1,0 +1,10 @@
+{
+  "experiment": "inette_full_dct_s1",
+  "cases": 10,
+  "avg_poison_success": 30.0,
+  "stderr": 15.275252316519463,
+  "avg_valid_acc": 81.32772680937819,
+  "valid_acc_stderr": 0.416849120606767,
+  "mean_brew_minutes": 11.408098168373108,
+  "paper_setting": false
+}
