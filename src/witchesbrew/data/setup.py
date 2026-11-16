@@ -207,9 +207,15 @@ def _random_case(case_id, cfg, trainset, validset) -> PoisonCase:
     The base seed is `cfg.case_seed` when set -- so the drawn (target, poison) pair is reproducible
     and independent of the experiment name, letting several experiments share the same cases -- and
     otherwise falls back to the experiment name, the legacy behaviour.
+
+    Different `case_seed` values must give disjoint case sets. With `base + case_id`, seed 1 case i
+    collided with seed 0 case i+1 (same target, same poisons), so the base is spread by a stride far
+    larger than any case count. Seed 0 keeps its original cases (0 * stride + case_id = case_id).
     """
-    base = cfg.case_seed if cfg.case_seed is not None else (abs(hash(cfg.name)) % (2**31))
-    seed = base + case_id
+    if cfg.case_seed is not None:
+        seed = int(cfg.case_seed) * 10_000 + case_id
+    else:
+        seed = (abs(hash(cfg.name)) % (2**31)) + case_id
     rng = np.random.default_rng(seed % (2**32 - 1))
     valid_labels = np.asarray(validset.targets)
     train_labels = np.asarray(trainset.targets)
