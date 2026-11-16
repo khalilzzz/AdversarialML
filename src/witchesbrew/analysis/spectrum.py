@@ -121,23 +121,36 @@ def visibility_ssim(clean_pixel: torch.Tensor, poisoned_pixel: torch.Tensor) -> 
     return sum(scores) / max(1, len(scores))
 
 
-def delta_report(delta_norm: torch.Tensor, clean_norm: torch.Tensor, dataset: str, cutoff: int) -> dict:
+def delta_report(
+    delta_norm: torch.Tensor,
+    clean_norm: torch.Tensor,
+    dataset: str,
+    cutoff: int,
+    purify_cutoff: int | None = None,
+) -> dict:
     """Per-case perturbation summary for the E3 success/detectability/visibility trade-off.
 
     Everything is averaged over the poison batch. `l2_pixel`/`linf_pixel` are in 0..1 pixel units;
-    `offmanifold_hf` is the detectability proxy; `ssim` is the visibility (1 = invisible).
+    `offmanifold_hf` is the energy outside the attacker's low-frequency block (`cutoff`, the WB-LF
+    subspace) and `offmanifold_hf_purify` the energy outside the *defender's* block
+    (`purify_cutoff`), i.e. the fraction a DCT purifier at that cutoff erases. The two differ for a
+    plain WB run, whose `cutoff` is never used by the attack and may sit at its default.
+    `ssim` is the visibility (1 = invisible).
     """
     dm, ds = denormalization_tensors(dataset, delta_norm.device)
     delta_pixel = delta_norm * ds
     clean_pixel = (clean_norm * ds + dm).clamp(0.0, 1.0)
     poisoned_pixel = (clean_pixel + delta_pixel).clamp(0.0, 1.0)
     per_image_l2 = delta_pixel.flatten(1).pow(2).sum(dim=1).sqrt().mean()
-    return {
+    report = {
         "l2_pixel": float(per_image_l2),
         "linf_pixel": float(delta_pixel.abs().max()),
         "offmanifold_hf": offmanifold_energy(delta_pixel, cutoff),
         "ssim": visibility_ssim(clean_pixel, poisoned_pixel),
     }
+    if purify_cutoff is not None:
+        report["offmanifold_hf_purify"] = offmanifold_energy(delta_pixel, purify_cutoff)
+    return report
 
 
 def _poison_gradient(

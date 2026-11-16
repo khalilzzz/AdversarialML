@@ -80,6 +80,20 @@ def test_gaussian_denoise_shape_and_range():
     assert out.shape == x.shape and out.min() >= 0 and out.max() <= 1
 
 
+def test_gaussian_denoise_actually_smooths():
+    """Regression: the kernel width must not be tied to the noise level.
+
+    With a small sigma the old operator degenerated to the identity plus noise. A real one-step
+    denoiser must remove high-frequency content: a checkerboard (pure highest frequency) has to lose
+    most of its energy, while a constant image must pass through unchanged.
+    """
+    board = 0.5 + 0.25 * _highfreq_image()
+    out = gaussian_denoise_onestep(board, sigma=0.0, eot=1, blur=1.0)
+    assert (out - 0.5).pow(2).sum() < 0.05 * (board - 0.5).pow(2).sum()
+    const = torch.full((1, 3, 32, 32), 0.3)
+    assert torch.allclose(gaussian_denoise_onestep(const, sigma=0.0, blur=1.0), const, atol=1e-5)
+
+
 def test_budget_survival_encodes_the_thesis():
     """High-frequency delta is erased by the low-pass filter; low-frequency delta survives."""
     clean = torch.full((1, 3, 32, 32), 0.5)
@@ -176,6 +190,24 @@ def test_wb_psi_brewing_runs_through_jpeg_and_respects_eps():
     assert loss == loss  # not NaN
 
 
+def test_wb_psi_purifies_before_augmenting():
+    """E2 must apply Psi then augmentation, the order the victim uses (train.py `prepare`)."""
+    from witchesbrew.data.augment import build_augmentation
+
+    cfg, clean, labels, targets, adv_labels = _tiny_brew_setup(brew_purify="dct", purify_cutoff=4)
+    augment = build_augmentation(cfg.dataset)
+    brewer = Brewer(
+        cfg, [_tiny_model()], clean, labels, targets, adv_labels, torch.device("cpu"), augment=augment
+    )
+    x = clean[:2]
+    torch.manual_seed(0)
+    got = brewer.brew_purifier(x)
+    bounds = brewer.bounds
+    torch.manual_seed(0)
+    want = augment(brew_purifier_normalized(cfg, bounds.dm, bounds.ds)(x))
+    assert torch.allclose(got, want, atol=1e-6)
+
+
 def test_wb_psi_gradient_flows_through_purifier():
     """dB/dDelta must propagate through Psi, otherwise the attack cannot adapt to it."""
     cfg, clean, labels, targets, adv_labels = _tiny_brew_setup(brew_purify="jpeg")
@@ -215,6 +247,8 @@ def test_delta_report_keys_and_ranges():
     delta = bounds.clip_eps(torch.randn(4, 3, 32, 32) * bounds.eps_normalized)
     report = delta_report(delta, clean, "CIFAR10", cutoff=12)
     assert set(report) == {"l2_pixel", "linf_pixel", "offmanifold_hf", "ssim"}
+    both = delta_report(delta, clean, "CIFAR10", cutoff=12, purify_cutoff=8)
+    assert both["offmanifold_hf_purify"] >= both["offmanifold_hf"]  # smaller block erases more
     assert 0.0 <= report["offmanifold_hf"] <= 1.0
     assert report["linf_pixel"] <= 16.0 / 255.0 + 1e-6
     assert report["ssim"] <= 1.0 + 1e-6

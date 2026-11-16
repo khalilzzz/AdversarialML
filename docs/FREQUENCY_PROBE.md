@@ -66,7 +66,7 @@ noyau de la jacobienne de la purification est gaspillée.
 |---|---|---|
 | `dct` | troncature DCT passe-bas : garde les `cutoff×cutoff` coefficients haut-gauche. **Le projecteur `P` exact** de la Proposition. | exact |
 | `jpeg` | DCT par blocs 8×8, quantification (table luminance standard × `quality`), déquant, IDCT. Le filtre de PureGen. Quantification non différentiable → variante straight-through (BPDA) pour l'usage gradient. | exact (quantification réelle) |
-| `gaussian` | moyenne EOT de `blur(x + σ·η)` : approximation du débruiteur optimal à un pas (Tweedie : `P` ≈ projection sur le plan tangent local de la variété). | **approximation**, pas un DDPM |
+| `gaussian` | moyenne EOT de `blur(x + σ·η)` : bruit gaussien d'écart-type `purify_sigma` (unités pixel), puis lissage gaussien d'écart-type spatial `purify_blur` pixels (padding réfléchi). Approximation du débruiteur optimal à un pas (Tweedie : `P` ≈ projection sur le plan tangent local de la variété). **Avant le correctif, la largeur du noyau était `purify_sigma` lui-même : avec σ ≤ 0,25 le noyau était un Dirac et l'opérateur ajoutait du bruit sans rien lisser. Les mesures `gaussian` des probes ImageNet antérieures mesurent du bruit, pas une purification.** | **approximation**, pas un DDPM |
 
 E2 est implémenté avec ces Ψ synthétiques (JPEG BPDA, DCT, débruiteur gaussien un pas). Le vrai DDPM
 CIFAR-10 de Hong et al. n'est pas implémenté ; `_psi_by_kind` / `build_purifier` sont le point
@@ -110,13 +110,21 @@ Brewing conscient de la défense. Deux flags distincts :
   JPEG utilise la variante BPDA straight-through, donc `dB/dδ` traverse Ψ.
 - `purify ∈ {none,jpeg,dct,gaussian}` : la défense **côté victime**, appliquée aux images empoisonnées
   à l'ingestion dans `train_model` (ordre PureGen : inject → Ψ → augmentation). Le surrogate θ reste
-  propre (`purify` forcé à `none` au pré-entraînement).
+  propre par défaut (`purify` forcé à `none` au pré-entraînement).
+- `surrogate_purify=true` : attaquant pleinement adaptatif. Le surrogate est lui-même entraîné sur
+  `Ψ(data)` (avec `Ψ = brew_purify`), comme la victime défendue, donc le gradient apparié appartient
+  au bon modèle. Sans ce flag, θ vient d'un modèle propre alors que la victime est un modèle
+  entraîné sur des images filtrées (à `c=56`, 3 à 6 points de précision en moins) : le gradient
+  apparié n'est pas celui de la victime. Le checkpoint du surrogate porte un suffixe `_p<Ψ><c>`.
 
 Les deux sont séparés exprès : brasser contre un Ψ et évaluer sous un autre = test de transfert ;
 même Ψ des deux côtés = l'attaque adaptative. Défauts `none` → chemin du papier inchangé.
 
-**Ordre vs augmentation** : au brassage, Ψ s'applique à l'entrée du modèle (après l'augmentation
-différentiable si active) ; côté victime, Ψ purifie l'image stockée avant l'augmentation. Pour
+**Ordre vs augmentation** : des deux côtés, Ψ s'applique à l'image stockée **avant** l'augmentation
+(`Brewer` replie l'augmentation dans l'opérateur : `augment(Ψ(x+δ))`). Une version antérieure
+appliquait Ψ après la translation au brassage : le passe-bas d'une image translatée avec bords à
+zéro n'est pas la translation du passe-bas, donc le gradient apparié n'était pas exactement celui
+que la victime produit. Pour
 reproduire exactement le réglage certifié de Hong et al. (sans augmentation d'entraînement), mettre
 `victim_augment=false`.
 

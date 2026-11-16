@@ -138,7 +138,16 @@ class Brewer:
         # E1: confine the perturbation to the low-frequency subspace via alternating projection.
         self.lowfreq = getattr(cfg, "delta_param", "full") == "lowfreq"
         # E2: brew through a differentiable Psi (None when brew_purify is off -> paper path).
-        self.brew_purifier = brew_purifier_normalized(cfg, self.bounds.dm, self.bounds.ds)
+        psi = brew_purifier_normalized(cfg, self.bounds.dm, self.bounds.ds)
+        if psi is not None and augment is not None:
+            # The victim purifies the stored image *then* augments it (train.py `prepare`), so the
+            # brewing-time operator has to be augment(Psi(x + delta)) in that order. Applying Psi
+            # after the translation would match the gradient of a differently filtered image: a
+            # low-pass of a zero-padded shift is not the shift of a low-pass. The augmentation is
+            # therefore folded into the purifier and skipped in the batch loop when E2 is on.
+            self.brew_purifier = lambda x: augment(psi(x))
+        else:
+            self.brew_purifier = psi
         self.brew_eot = max(1, getattr(cfg, "brew_purify_eot", 1))
         self.criterion = torch.nn.CrossEntropyLoss()
         # Projection needs the clean images on the compute device every step; cache one copy
@@ -205,9 +214,9 @@ class Brewer:
             clean = self._clean_device[index]
             labels = self.labels[index].to(self.device, non_blocking=True)
             inputs = clean + delta[index]
-            if self.augment is not None:
+            if self.augment is not None and self.brew_purifier is None:
                 # Alg. 1 line 5: augmentation is applied *after* Delta is added, and the update
-                # differentiates through it (section 3.4).
+                # differentiates through it (section 3.4). With E2 on it lives inside the purifier.
                 inputs = self.augment(inputs)
             losses = [self._objective(k, inputs, labels) for k in range(len(self.models))]
             loss = torch.stack(losses).mean()  # ensemble average (section 3.4)
@@ -230,7 +239,7 @@ class Brewer:
             clean = self._clean_device[index]
             labels = self.labels[index].to(self.device, non_blocking=True)
             inputs = clean + delta[index]
-            if self.augment is not None:
+            if self.augment is not None and self.brew_purifier is None:
                 inputs = self.augment(inputs)
             values = [self._objective(k, inputs, labels) for k in range(len(self.models))]
             total += float(torch.stack(values).mean().detach())

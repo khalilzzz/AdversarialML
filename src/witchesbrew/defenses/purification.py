@@ -24,6 +24,7 @@ orthogonal projection, which is what the linear bound rho_S(x_t) = ||P x_t|| / |
 from __future__ import annotations
 
 import functools
+import math
 from typing import Callable
 
 import torch
@@ -133,24 +134,40 @@ def jpeg_compress(x: torch.Tensor, quality: int = 75, differentiable: bool = Fal
     return ((out + 128.0) / 255.0).clamp(0.0, 1.0)
 
 
-def _gaussian_kernel(sigma: float, device, dtype, radius: int = 2) -> torch.Tensor:
+def _gaussian_kernel(blur: float, device, dtype) -> torch.Tensor:
+    """Normalized 2D Gaussian kernel with spatial std `blur` (in pixels), radius 3*blur."""
+    radius = max(1, int(math.ceil(3 * blur)))
     coords = torch.arange(-radius, radius + 1, device=device, dtype=dtype)
-    k1 = torch.exp(-(coords**2) / (2 * sigma**2))
+    k1 = torch.exp(-(coords**2) / (2 * blur**2))
     k1 = k1 / k1.sum()
     return torch.outer(k1, k1)
 
 
 def gaussian_denoise_onestep(
-    x: torch.Tensor, sigma: float = 0.25, eot: int = 1, generator: torch.Generator | None = None
+    x: torch.Tensor,
+    sigma: float = 0.25,
+    eot: int = 1,
+    generator: torch.Generator | None = None,
+    blur: float = 1.0,
 ) -> torch.Tensor:
-    """EOT mean of blur(x + sigma*eta). Synthetic one-step denoiser; a local linear manifold map."""
-    kernel = _gaussian_kernel(max(sigma, 1e-3), x.device, x.dtype)
+    """EOT mean of blur(x + sigma*eta). Synthetic one-step denoiser; a local linear manifold map.
+
+    `sigma` is the noise level in [0, 1] pixel units and `blur` the spatial std of the smoothing
+    kernel in pixels. They are separate quantities: an earlier version reused `sigma` as the kernel
+    width, so with sigma <= 0.25 the kernel was a delta (centre weight 0.999) and the operator added
+    noise without denoising anything. That version measured noise, not purification.
+    """
+    kernel = _gaussian_kernel(max(blur, 1e-3), x.device, x.dtype)
     k = kernel.shape[-1]
     weight = kernel.view(1, 1, k, k).repeat(x.shape[1], 1, 1, 1)
     acc = torch.zeros_like(x)
+    pad = k // 2
     for _ in range(max(1, eot)):
         noise = torch.randn(x.shape, device=x.device, dtype=x.dtype, generator=generator) * sigma
-        blurred = F.conv2d(x + noise, weight, padding=k // 2, groups=x.shape[1])
+        # Reflect-pad before the convolution: zero padding would darken a `pad`-pixel border on
+        # every image, a brightness artefact the operator must not introduce.
+        padded = F.pad(x + noise, (pad, pad, pad, pad), mode="reflect")
+        blurred = F.conv2d(padded, weight, groups=x.shape[1])
         acc = acc + blurred
     return (acc / max(1, eot)).clamp(0.0, 1.0)
 
@@ -164,7 +181,9 @@ def _psi_by_kind(kind: str, cfg, differentiable: bool) -> Callable[[torch.Tensor
     if kind == "jpeg":
         return lambda x: jpeg_compress(x, cfg.jpeg_quality, differentiable=differentiable)
     if kind == "gaussian":
-        return lambda x: gaussian_denoise_onestep(x, cfg.purify_sigma, cfg.purify_eot)
+        return lambda x: gaussian_denoise_onestep(
+            x, cfg.purify_sigma, cfg.purify_eot, blur=getattr(cfg, "purify_blur", 1.0)
+        )
     raise ValueError(f"unknown purifier: {kind}")
 
 

@@ -46,10 +46,20 @@ def surrogate_ablation(cfg) -> float:
     return cfg.data_ablation if cfg.ablate_surrogate else 1.0
 
 
+def surrogate_purifier(cfg) -> str:
+    """Which Psi the surrogate trains under: the brewing Psi for an adaptive attacker, else none."""
+    if getattr(cfg, "surrogate_purify", False) and getattr(cfg, "brew_purify", "none") != "none":
+        return cfg.brew_purify
+    return "none"
+
+
 def surrogate_path(cfg, seed: int) -> Path:
+    psi = surrogate_purifier(cfg)
+    # A surrogate trained on purified data is a different model, so it gets its own checkpoint.
+    psi_tag = "" if psi == "none" else f"_p{psi}{cfg.purify_cutoff if psi == 'dct' else ''}"
     tag = (
         f"{cfg.dataset}_{cfg.net}_w{cfg.width}_e{cfg.pretrain_epochs}"
-        f"_a{surrogate_ablation(cfg):g}_s{seed}.pt"
+        f"_a{surrogate_ablation(cfg):g}{psi_tag}_s{seed}.pt"
     )
     return Path(cfg.checkpoint_dir) / tag
 
@@ -81,9 +91,10 @@ def get_surrogate(cfg, trainset, validset, device: torch.device, seed: int) -> t
             **cfg.to_dict(),
             "epochs": cfg.pretrain_epochs,
             "data_ablation": surrogate_ablation(cfg),
-            # theta must come from a *clean* model: the purification defense (E2/E3) is a victim-time
-            # measure, so it must never touch the surrogate that supplies the fixed gradient.
-            "purify": "none",
+            # By default theta comes from a *clean* model: the purification defense is a victim-time
+            # measure. With `surrogate_purify` the attacker is assumed to know Psi and trains its
+            # surrogate the way the victim will, so the matched gradient belongs to the right model.
+            "purify": surrogate_purifier(cfg),
         }
     )
     augment = augmentation_for(cfg).to(device)
@@ -147,7 +158,9 @@ def run_case(cfg, case_id: int, device: torch.device | None = None) -> dict:
     brew_minutes = timer.minutes()
     # E3: where the budget landed, for the success/detectability/visibility trade-off. Cheap, on the
     # brewed delta; the cutoff is the low-frequency subspace boundary (same one WB-LF projects onto).
-    delta_metrics = delta_report(delta, clean_poisons, cfg.dataset, cfg.lowfreq_cutoff)
+    delta_metrics = delta_report(
+        delta, clean_poisons, cfg.dataset, cfg.lowfreq_cutoff, purify_cutoff=cfg.purify_cutoff
+    )
 
     victim_results = []
     runs = 1 if cfg.dryrun else cfg.victim_runs

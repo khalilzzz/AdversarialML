@@ -116,7 +116,8 @@ class Config:
     purify: str = "none"  # none | jpeg | dct | gaussian -- victim-side defense applied at ingest
     jpeg_quality: int = 75
     purify_cutoff: int = 12  # DCT low-pass cutoff for purify == dct
-    purify_sigma: float = 0.25  # noise level of the one-step Gaussian denoiser
+    purify_sigma: float = 0.25  # noise level of the one-step Gaussian denoiser (pixel units)
+    purify_blur: float = 1.0  # spatial std, in pixels, of its smoothing kernel
     purify_eot: int = 1  # EOT samples over the randomness of Psi
     # E2 (WB-Psi): brew *through* a differentiable Psi (BPDA for jpeg, EOT for the stochastic ones),
     # so the perturbation is matched on Psi(x+delta) rather than (x+delta). `brew_purify` selects the
@@ -125,6 +126,10 @@ class Config:
     # paper path untouched.
     brew_purify: str = "none"  # none | jpeg | dct | gaussian
     brew_purify_eot: int = 1  # EOT draws for the brewing-time Psi (stochastic operators)
+    # Fully adaptive attacker: the surrogate that supplies theta is itself trained on Psi(data), the
+    # way the purifying victim trains, so the matched gradient belongs to the right model. Only
+    # applies when brew_purify is set; False keeps theta from a clean surrogate.
+    surrogate_purify: bool = False
 
     # --- runtime --------------------------------------------------------
     device: str = "auto"
