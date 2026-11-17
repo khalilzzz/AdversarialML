@@ -1,0 +1,29 @@
+# Piste 2 (DPA) on Imagenette -- research extension, NOT the paper.
+#
+# Deep Partition Aggregation with k=10 partitions of ~950 images each (Imagenette has ~9 500 training
+# images). The attacker brews Witches' Brew poisons at a 5% budget and, when `dpa_attack_partitions`
+# is set, steers them into m chosen partitions through the public hash (placement lemma) instead of
+# letting the hash spread them (assumption H1 of Wang & Feizi). See docs/DPA_PROBE.md.
+name: dpa_imagenette
+dataset: custom
+data_path: /Data/khl/imagenette2-320
+image_size: 224
+net: ResNet18
+victim_net: ResNet18
+pretrained: false
+budget: 0.05
+eps: 16.0
+cases: 10
+case_seed: 0
+victim_runs: 1
+restarts: 8
+attack_steps: 250
+workers: 8
+# --- DPA ---
+dpa_k: 10
+dpa_hash: sum              # sum | weighted | secret
+dpa_attack_partitions: 0   # 0 = H1 (uniform); set m >= 1 for the hash-aware attacker
+dpa_pick: random           # random | weakest
+dpa_placement_margin: 2.0
+dpa_partition_surrogate: false
+dpa_single_victim: false

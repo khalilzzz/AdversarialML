@@ -34,6 +34,9 @@ def test_config_loads(path: Path):
     assert cfg.delta_param in {"full", "lowfreq"}
     assert cfg.purify in {"none", "jpeg", "dct", "gaussian"}
     assert cfg.brew_purify in {"none", "jpeg", "dct", "gaussian"}
+    assert cfg.dpa_hash in {"sum", "weighted", "secret"}
+    assert cfg.dpa_pick in {"random", "weakest"}
+    assert 0 <= cfg.dpa_attack_partitions <= max(cfg.dpa_k, 0)
     assert cfg.dataset.upper() in {"CIFAR10", "IMAGENET", "CUSTOM"}
     assert cfg.lr in {0.1, 0.01}  # appendix B.2 allows only these two
 

@@ -18,15 +18,20 @@ from pathlib import Path
 
 import torch
 
+import numpy as np
+from torch.utils.data import Subset
+
 from .analysis.spectrum import delta_report
 from .attacks.brew import Brewer
+from .attacks.placement import allocate, choose_partitions, place_in_partition
 from .data.augment import augmentation_for
 from .data.datasets import build_datasets, make_loader, num_classes
 from .data.setup import PoisonCase, build_case
 from .defenses.dp import make_gradient_hook
+from .defenses.dpa import DPAResult, hash_key_for, natural_partition_of, partition_dataset, train_dpa
 from .diagnostics import make_diagnostics_fn
 from .models.factory import build_model
-from .train import evaluate_accuracy, train_model
+from .train import ablated_subset, evaluate_accuracy, train_model
 from .utils import ResultStore, Timer, available_workers, get_device, mean_and_stderr, set_seed
 
 
@@ -243,6 +248,271 @@ def run_experiment(cfg, resume: bool = True) -> dict:
         "valid_acc_stderr": 100 * acc_stderr,
         "mean_brew_minutes": sum(r["brew_minutes"] for r in results) / max(1, len(results)),
         "paper_setting": all(r.get("paper_setting", False) for r in results),
+    }
+    (store.dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
+    return summary
+
+
+# ----------------------------------------------------------------------------------------------
+# Piste 2: Witches' Brew against Deep Partition Aggregation (research extension, NOT the paper).
+# ----------------------------------------------------------------------------------------------
+
+
+def _dpa_clean_tag(cfg, seed: int) -> str:
+    key = hash_key_for(cfg)
+    return (
+        f"dpa_clean_{cfg.dataset}_{cfg.victim_net}_w{cfg.width}_e{cfg.epochs}_k{cfg.dpa_k}"
+        f"_{cfg.dpa_hash}{'' if key is None else key}_a{cfg.data_ablation:g}_s{seed}.json"
+    )
+
+
+def _dpa_clean_reference(
+    cfg, partitions, trainset, validset, device, target_inputs, adv_labels, target_true, case, augment,
+    seed, classes,
+) -> dict:
+    """The k clean base models on the natural partitions: votes, margin g, m_0, per-model margins.
+
+    Cached as JSON (predictions only): every attack cell of the same case shares this reference, and
+    `dpa_pick=weakest` reads its per-partition logit margins.
+    """
+    path = Path(cfg.checkpoint_dir) / _dpa_clean_tag(cfg, seed)
+    if path.exists():
+        return json.loads(path.read_text(encoding="utf-8"))
+    result = train_dpa(
+        cfg, trainset, validset, partitions, device, None, None, target_inputs, adv_labels,
+        target_true, case.target_ids, augment, seed, classes,
+    )
+    payload = result.to_dict()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return payload
+
+
+def _partition_surrogate(cfg, trainset, validset, ids: list[int], device, seed: int, tag: str):
+    """A surrogate trained on one clean partition only (the attacker simulates base model j)."""
+    path = Path(cfg.checkpoint_dir) / f"dpa_part_{tag}.pt"
+    classes = num_classes(cfg.dataset)
+    set_seed(seed)
+    model = build_model(cfg.net, cfg.dataset, classes, cfg.width).to(device)
+    if path.exists():
+        model.load_state_dict(torch.load(path, map_location=device))
+        return model
+    pre_cfg = type(cfg)(
+        **{**cfg.to_dict(), "epochs": cfg.pretrain_epochs, "data_ablation": 1.0, "purify": "none"}
+    )
+    augment = augmentation_for(cfg).to(device)
+    train_model(pre_cfg, model, Subset(trainset, ids), validset, device, augment=augment, seed=seed)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(model.state_dict(), path)
+    return model
+
+
+def run_dpa_case(cfg, case_id: int, device: torch.device | None = None) -> dict:
+    """Brew one case, place the poisons (optionally), and evaluate against a DPA victim.
+
+    Steps: clean reference (k clean base models, cached) -> choose m partitions and allocate the
+    budget -> brew at `eps - margin` -> steer each poison's hash into its partition -> partition the
+    stored dataset -> train the k base models -> vote. Reports, per attacked partition, whether its
+    base model flipped to y_adv: the fraction of flips at poison fraction rho is the p(rho) of the
+    allocation theorem.
+    """
+    if cfg.dpa_k <= 0:
+        raise ValueError("run_dpa_case needs dpa_k > 0")
+    device = device or get_device(cfg.device)
+    trainset, validset = build_datasets(cfg.dataset, cfg.data_path, cfg)
+    case: PoisonCase = build_case(case_id, cfg, trainset, validset)
+    classes = num_classes(cfg.dataset)
+    augment = augmentation_for(cfg).to(device)
+    workers = available_workers(cfg.workers)
+    k = cfg.dpa_k
+    key = hash_key_for(cfg)
+    victim_seed = case.seed + 7919  # same base seed as the first victim of `run_case`
+
+    # The victim's data: the (possibly ablated) training set, partitioned by the hash.
+    kept = ablated_subset(trainset, cfg.data_ablation, victim_seed)
+    kept_ids = list(kept.indices) if isinstance(kept, Subset) else list(range(len(trainset)))
+
+    target_inputs, target_true = _stack(validset, case.target_ids, device)
+    adv_labels = torch.full_like(target_true, case.poison_class)
+    clean_poisons, poison_labels = _stack(trainset, case.poison_ids, device)
+
+    # 1. Clean reference on the natural partitions.
+    clean_parts = partition_dataset(
+        trainset, kept_ids, k, cfg.dpa_hash, key, cfg.dataset, device, workers=workers
+    )
+    clean_ref = _dpa_clean_reference(
+        cfg, clean_parts, trainset, validset, device, target_inputs, adv_labels, target_true, case,
+        augment, victim_seed, classes,
+    )
+    # Logit margin each clean base model holds between its own prediction and y_adv.
+    clean_margins = [
+        b["target_logits"][b["target_pred"]] - b["target_logits"][case.poison_class]
+        for b in clean_ref["base"]
+    ]
+
+    # 2. Allocation: which partitions, how many poisons each.
+    rng = np.random.default_rng((case.seed + 31) % (2**32 - 1))
+    attacked = choose_partitions(k, cfg.dpa_attack_partitions, cfg.dpa_pick, rng, clean_margins)
+    assignment = allocate(case.poison_ids, attacked)
+    if assignment and cfg.dpa_hash == "secret":
+        raise ValueError("dpa_hash=secret: placement impossible, set dpa_attack_partitions=0")
+
+    # 3. Brewing, with eps reduced by the placement margin when the hash will be steered.
+    brew_eps = cfg.eps - cfg.dpa_placement_margin if assignment else cfg.eps
+    brew_cfg = type(cfg)(**{**cfg.to_dict(), "eps": brew_eps})
+    timer = Timer()
+    set_seed(case.seed)
+    brew_losses: dict[str, float] = {}
+    if cfg.dpa_partition_surrogate and assignment:
+        delta = torch.zeros_like(clean_poisons.cpu())
+        for j in attacked:
+            rows = [r for r, pid in enumerate(case.poison_ids) if assignment[int(pid)] == j]
+            tag = f"{cfg.dataset}_{cfg.net}_w{cfg.width}_e{cfg.pretrain_epochs}_k{k}_s{case.seed}_p{j}"
+            model = _partition_surrogate(
+                cfg, trainset, validset, clean_parts[j], device, victim_seed + 100_003 * (j + 1), tag
+            )
+            brewer = Brewer(
+                brew_cfg, [model], clean_poisons[rows].cpu(), poison_labels[rows].cpu(),
+                target_inputs, adv_labels, device, augment=augment if cfg.differentiable_augment else None,
+            )
+            group_delta, loss, _ = brewer.brew()
+            delta[rows] = group_delta.cpu()
+            brew_losses[str(j)] = loss
+        delta = delta.to(device)
+        brew_loss = float(np.mean(list(brew_losses.values())))
+    else:
+        models = build_surrogate_ensemble(cfg, trainset, validset, device, case.seed)
+        brewer = Brewer(
+            brew_cfg, models, clean_poisons.cpu(), poison_labels.cpu(), target_inputs, adv_labels,
+            device, augment=augment if cfg.differentiable_augment else None,
+        )
+        delta, brew_loss, _ = brewer.brew()
+    brew_minutes = timer.minutes()
+
+    # 4. Placement: steer each poison's stored image into its partition (lemma (a)/(b)).
+    placement = {"placed": 0}
+    if assignment:
+        delta, placement = place_in_partition(
+            delta, clean_poisons, cfg.dataset, assignment, case.poison_ids, k, cfg.dpa_hash, key,
+            cfg.eps, rng,
+        )
+    delta_metrics = delta_report(delta, clean_poisons, cfg.dataset, cfg.lowfreq_cutoff)
+
+    # 5. The DPA victim on the stored (poisoned) dataset.
+    parts = partition_dataset(
+        trainset, kept_ids, k, cfg.dpa_hash, key, cfg.dataset, device,
+        delta=delta, poison_ids=case.poison_ids, workers=workers,
+    )
+    where = natural_partition_of(case.poison_ids, parts)
+    # Under `data_ablation` the victim keeps a random subset: poisons outside it are in no partition
+    # (the paper's Table 7 behaviour), so only the ones the victim actually ingests are checked.
+    kept_set = set(kept_ids)
+    poisons_seen = [int(p) for p in case.poison_ids if int(p) in kept_set]
+    if assignment:
+        misplaced = [pid for pid in poisons_seen if where.get(pid) != assignment[pid]]
+        assert not misplaced, f"{len(misplaced)} poisons did not land in their partition"
+    dpa: DPAResult = train_dpa(
+        cfg, trainset, validset, parts, device, delta, case.poison_ids, target_inputs, adv_labels,
+        target_true, case.target_ids, augment, victim_seed, classes,
+    )
+
+    # Per-partition flips: p(rho) of the allocation theorem, measured.
+    poisoned_parts = sorted({p for p in where.values()})
+    per_partition = []
+    for p in poisoned_parts:
+        b = dpa.base[p]
+        per_partition.append(
+            {
+                "partition": p,
+                "size": b.size,
+                "poisons": b.poisons,
+                "rho": b.poisons / max(1, b.size),
+                "flipped": b.target_pred == case.poison_class,
+                "clean_pred": clean_ref["base"][p]["target_pred"],
+                "clean_margin": clean_margins[p],
+                "target_adv_loss": b.target_adv_loss,
+            }
+        )
+    flips = [r["flipped"] for r in per_partition]
+
+    # 6. Optional: the undefended single victim at the same budget, for the DPA-vs-none comparison.
+    single = None
+    if cfg.dpa_single_victim:
+        set_seed(victim_seed)
+        victim = build_model(cfg.victim_net, cfg.dataset, classes, cfg.width).to(device)
+        history = train_model(
+            cfg, victim, trainset, validset, device, poison_delta=delta, poison_ids=case.poison_ids,
+            target_inputs=target_inputs, adv_labels=adv_labels, true_labels=target_true,
+            target_ids=case.target_ids, augment=augment, seed=victim_seed,
+        )
+        single = {
+            "success": history.target_adv_acc[-1],
+            "valid_acc": history.valid_acc[-1],
+            "target_adv_loss": history.target_adv_loss[-1],
+        }
+
+    success = float(dpa.prediction == case.poison_class)
+    return {
+        "config": cfg.to_dict(),
+        "case": case.to_dict(),
+        "poison_count": len(case.poison_ids),
+        "poisons_in_training": len(poisons_seen),
+        "dpa": {
+            "k": k,
+            "hash": cfg.dpa_hash,
+            "attacked_partitions": attacked,
+            "placement": placement,
+            "clean": {kk: v for kk, v in clean_ref.items() if kk != "base"},
+            "clean_base_preds": [b["target_pred"] for b in clean_ref["base"]],
+            "clean_margins": clean_margins,
+            "poisoned": {kk: v for kk, v in dpa.to_dict().items() if kk != "base"},
+            "poisoned_base_preds": [b.target_pred for b in dpa.base],
+            "partition_sizes": [b.size for b in dpa.base],
+            "per_partition": per_partition,
+            "flip_rate": float(np.mean(flips)) if flips else 0.0,
+            "flipped": int(sum(flips)),
+        },
+        "single_victim": single,
+        "brew_loss": brew_loss,
+        "brew_loss_per_partition": brew_losses,
+        "brew_eps": brew_eps,
+        "brew_minutes": brew_minutes,
+        "case_success": success,
+        "mean_valid_acc": dpa.valid_acc,
+        "delta_metrics": delta_metrics,
+        "paper_setting": False,
+    }
+
+
+def run_dpa_experiment(cfg, resume: bool = True) -> dict:
+    """Loop `run_dpa_case` over the cases and aggregate like `run_experiment`."""
+    device = get_device(cfg.device)
+    store = ResultStore(cfg.results_dir, cfg.name)
+    case_ids = cfg.case_ids if cfg.case_ids is not None else list(range(cfg.cases))
+    for case_id in case_ids:
+        if resume and store.done(case_id):
+            continue
+        store.write(case_id, run_dpa_case(cfg, case_id, device))
+
+    results = store.read_all()
+    mean, stderr = mean_and_stderr([r["case_success"] for r in results])
+    acc_mean, acc_stderr = mean_and_stderr([r["mean_valid_acc"] for r in results])
+    flip_mean, flip_stderr = mean_and_stderr([r["dpa"]["flip_rate"] for r in results])
+    singles = [r["single_victim"]["success"] for r in results if r.get("single_victim")]
+    summary = {
+        "experiment": cfg.name,
+        "cases": len(results),
+        "avg_poison_success": 100 * mean,
+        "stderr": 100 * stderr,
+        "avg_valid_acc": 100 * acc_mean,
+        "valid_acc_stderr": 100 * acc_stderr,
+        "avg_flip_rate": 100 * flip_mean,
+        "flip_rate_stderr": 100 * flip_stderr,
+        "avg_clean_margin": float(np.mean([r["dpa"]["clean"]["margin"] for r in results])),
+        "avg_poisoned_margin": float(np.mean([r["dpa"]["poisoned"]["margin"] for r in results])),
+        "avg_single_victim_success": 100 * float(np.mean(singles)) if singles else None,
+        "mean_brew_minutes": sum(r["brew_minutes"] for r in results) / max(1, len(results)),
+        "paper_setting": False,
     }
     (store.dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     return summary

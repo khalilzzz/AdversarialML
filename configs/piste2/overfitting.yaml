@@ -1,0 +1,25 @@
+# Piste 2, E0: does Witches' Brew suffer from "poisoning overfitting" (Wang & Feizi 2023, Def. 5.1)?
+# Research extension, NOT the paper.
+#
+# At a fixed poison *fraction*, shrink the training set and watch the success rate. Wang & Feizi's
+# explanation of DPA's empirical robustness needs the success to drop with the absolute number of
+# samples; Schwarzschild et al. measured it for other attacks, never for gradient matching. The
+# paper's own Table 7 knob is reused: `data_ablation` keeps a random fraction of the training set
+# (poisons included, so the fraction rho is unchanged) and `ablate_surrogate` shrinks the brewing
+# network's data the same way.
+#
+#   python scripts/sweep.py --config piste2/overfitting.yaml --grid data_ablation=1,0.5,0.2,0.1
+name: wb_overfitting
+dataset: custom
+data_path: /Data/khl/imagenette2-320
+image_size: 224
+net: ResNet18
+pretrained: false
+budget: 0.05
+eps: 16.0
+cases: 10
+case_seed: 0
+victim_runs: 1
+workers: 8
+ablate_surrogate: true
+data_ablation: 1.0

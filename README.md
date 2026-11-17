@@ -43,6 +43,7 @@ docs/
   GUIDE.md              start here: the two codebases, what validating the paper means, what to run first
   CUSTOM_DATA.md        poison your own ImageFolder dataset, your own target, your own parameters
   FREQUENCY_PROBE.md    research extension (piste 1): where WB spends its l_inf budget vs purification
+  DPA_PROBE.md          research extension (piste 2): WB against Deep Partition Aggregation, hash-aware placement
   PAPER_NOTES.md        the paper, summarized: threat model, eqs. 1-4, Alg. 1, Prop. 1, every result
   DESIGN_DECISIONS.md   every choice -> value -> source (paper section / reference code / assumption)
   EXPERIMENTS.md        one row per published number: config, command, what to expect

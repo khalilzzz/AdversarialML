@@ -143,6 +143,22 @@ the loss changes.
 | Filtering detector | distance to the poison-class feature centroid, remove the farthest 10% / 20% of that class | [A] | [P App. F.2] says only "anomaly filtering" in feature space. Centroid distance is picked because Fig. 4a's own x-axis is "l2 distance to poison class centroid", so it is the statistic the paper itself plots. The random-guessing baseline in Table 6 is analytic, so it needs no choice |
 | Fig. 4a second panel | l2 distance to the target image feature, same victim model | [P Fig. 4a] | stated; used to show the absence of feature collision |
 
+### 8b. Deep Partition Aggregation (piste 2, research extension -- not in the paper)
+
+Everything below sits behind `dpa_k: 0` (off); the paper path never reads these fields. Sources: Levine & Feizi (ICLR 2021), Wang & Feizi (2023), and `docs/theory/theorie_pistes.tex` sec. 4.
+
+| Item | Value | Source | Justification |
+|---|---|---|---|
+| Partition hash | pixel sum of the stored 8-bit image, mod `k` (`sum`); `sum_j W_j x_j mod (2^31-1) mod k` with public `W` (`weighted`); same with a secret `W` (`secret`) | Levine & Feizi reference code (sum); Wang & Feizi Def. 4.1 (weighted) | [A] the prime and the range of `W` are not specified by Wang & Feizi; any large prime works for the lemma |
+| What is hashed | the image the defender stores: poisons hashed *after* their perturbation, quantized to 8 bits | [A] | the defender never sees the clean image; hashing anything else would let the attacker's placement and the defender's partition disagree |
+| Tie rule | majority vote, ties toward the smaller class index; margin `g = V_y0 - max_{y != y0}(V_y + 1[y < y0])` | Levine & Feizi Thm. 1 | stated |
+| Certified radius / `m_0` | `ceil(g/2) - 1` poisons tolerated; `floor(g/2) + 1` base models must flip | Thm. 1; theory doc Thm. allocation (i) | arithmetic of the certificate |
+| Base model recipe | victim recipe (`epochs`, `lr`, augmentation) on the partition alone; base model `i` seeded `seed + i`, identical for the clean reference and the poisoned run | [A] | pairs clean and poisoned base models so only the poisons differ |
+| Placement | pixel sum: `+1` on `t < k` unsaturated pixels; public weighted: `+-1` single-pixel search, incremental hash, `<= 50k` trials; secret: refused | theory doc Lemma (placement) (a)/(b)/(c) | cost `1/255` in l_inf, reserved by brewing at `eps - dpa_placement_margin` (default 2: 1 for the shift, 1 for 8-bit rounding) |
+| Allocation | equal split `B/m` over `m` partitions chosen at random or by smallest clean logit margin on the target (`weakest`) | theory doc Thm. allocation (ii), concave case | [A] the concave regime is assumed; the convex one would use `m = m_0` |
+| Partition surrogate | optional: each attacked group brewed against a surrogate trained on that clean partition only | theory doc sec. 4.6 | [A] the attacker knows the hash, hence the partition contents |
+| Aggregate validation accuracy | majority vote of the base models on the validation set, target excluded | [P App. F.9] for the exclusion | [A] |
+
 ## 9. Diagnostics (Fig. 2, 5, 9, 11)
 
 | Item | Value | Source |

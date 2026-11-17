@@ -131,6 +131,20 @@ class Config:
     # applies when brew_purify is set; False keeps theta from a clean surrogate.
     surrogate_purify: bool = False
 
+    # --- piste 2: Deep Partition Aggregation (research, NOT the paper) ---
+    # Defender: k partitions by a hash of the stored image, one base model each, majority vote.
+    # Attacker: optionally places the poisons into m chosen partitions (placement lemma) instead of
+    # letting the hash spread them (H1). Neutral default keeps every existing path untouched.
+    dpa_k: int = 0  # 0 = off
+    dpa_hash: str = "sum"  # sum | weighted (public key) | secret (key unknown to the attacker)
+    dpa_hash_key: int = 0  # seed of the public weights W for `weighted`
+    dpa_secret_key: int | None = None  # seed of W for `secret`; never read by the attacker
+    dpa_attack_partitions: int = 0  # m attacked partitions; 0 = no placement
+    dpa_pick: str = "random"  # random | weakest (smallest clean logit margin on the target)
+    dpa_placement_margin: float = 2.0  # eps (0..255) reserved for the +-1 placement and 8-bit rounding
+    dpa_partition_surrogate: bool = False  # brew each group against a surrogate trained on its partition
+    dpa_single_victim: bool = False  # also train the undefended single victim for comparison
+
     # --- runtime --------------------------------------------------------
     device: str = "auto"
     workers: int = 2

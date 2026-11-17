@@ -546,3 +546,6 @@ du papier ne bouge pas) :
 - **Sonde fréquentielle (piste 1)** — `docs/FREQUENCY_PROBE.md` : où WB dépense son budget `ℓ∞` et ce
   qui survit à la purification (JPEG, passe-bas DCT, débruitage), plus l'attaque WB-LF contrainte au
   sous-espace conservé. Répond à la question ouverte de Hong et al. (2024).
+- **WB contre DPA (piste 2)** — `docs/DPA_PROBE.md` : défense par agrégation de partitions (hash,
+  k modèles, vote), attaquant qui place ses poisons dans les partitions de son choix via le hash
+  public, et la contre-mesure du hash secret. Teste les hypothèses implicites de Wang & Feizi (2023).
